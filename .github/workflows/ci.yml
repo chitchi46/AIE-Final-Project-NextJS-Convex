@@ -1,0 +1,157 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, "feature/*" ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 全履歴を取得（git filter-repoのため）
+
+      - name: Check for sensitive data patterns
+        run: |
+          # 機密情報パターンをチェック
+          echo "🔍 Scanning for sensitive information..."
+          
+          # 危険なパターンを定義
+          PATTERNS=(
+            "sk-[a-zA-Z0-9]{20,}"
+            "sk-proj-[a-zA-Z0-9]{40,}"
+            "your-secret-key-for-jwt-authentication"
+            "cnx_[a-zA-Z0-9]{20,}"
+            "Bearer\s+[A-Za-z0-9+/]{40,}={0,2}"
+          )
+          
+          # 各パターンをチェック
+          for pattern in "${PATTERNS[@]}"; do
+            if git grep -E "$pattern" -- '*.js' '*.ts' '*.tsx' '*.json' ':!*.example' ':!*test*'; then
+              echo "❌ Sensitive information pattern detected: $pattern"
+              exit 1
+            fi
+          done
+          
+          echo "✅ No sensitive information detected"
+
+      - name: Check for forbidden files
+        run: |
+          # 禁止されたファイルをチェック
+          FORBIDDEN=(
+            ".env"
+            ".env.local"
+            ".env.production"
+            "cookies.txt"
+            "*.pem"
+            "*.key"
+            "*.cert"
+          )
+          
+          for file in "${FORBIDDEN[@]}"; do
+            if find . -name "$file" -not -path "*/node_modules/*" | grep -q .; then
+              echo "❌ Forbidden file found: $file"
+              exit 1
+            fi
+          done
+          
+          echo "✅ No forbidden files found"
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: security-scan
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: nextjs-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./nextjs-app
+        run: npm ci
+
+      - name: Run linter
+        working-directory: ./nextjs-app
+        run: npm run lint
+
+      - name: Run tests
+        working-directory: ./nextjs-app
+        env:
+          JWT_SECRET: "test-secret-key-for-ci-environment-only-32-chars"
+          NEXT_PUBLIC_CONVEX_URL: "https://test.convex.cloud"
+          CONVEX_DEPLOYMENT: "test"
+        run: npm test -- --passWithNoTests
+
+      - name: Build application
+        working-directory: ./nextjs-app
+        env:
+          JWT_SECRET: "test-secret-key-for-ci-environment-only-32-chars"
+          NEXT_PUBLIC_CONVEX_URL: "https://test.convex.cloud"
+          CONVEX_DEPLOYMENT: "test"
+        run: npm run build
+
+  validate-env-example:
+    name: Validate Environment Example
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check .env.example exists
+        run: |
+          if [ ! -f "nextjs-app/.env.example" ]; then
+            echo "❌ .env.example file is missing!"
+            exit 1
+          fi
+          echo "✅ .env.example file exists"
+
+      - name: Validate .env.example format
+        run: |
+          # 必須の環境変数が含まれているかチェック
+          REQUIRED_VARS=(
+            "JWT_SECRET"
+            "NEXT_PUBLIC_CONVEX_URL"
+            "CONVEX_DEPLOYMENT"
+            "OPENAI_API_KEY"
+          )
+          
+          for var in "${REQUIRED_VARS[@]}"; do
+            if ! grep -q "^${var}=" nextjs-app/.env.example; then
+              echo "❌ Missing required variable in .env.example: $var"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All required variables found in .env.example"
+
+      - name: Check for real secrets in .env.example
+        run: |
+          # .env.exampleに実際の秘密情報が含まれていないかチェック
+          if grep -E "sk-[a-zA-Z0-9]{20,}" nextjs-app/.env.example; then
+            echo "❌ Real API key found in .env.example!"
+            exit 1
+          fi
+          
+          if grep -E "cnx_[a-zA-Z0-9]{20,}" nextjs-app/.env.example; then
+            echo "❌ Real Convex key found in .env.example!"
+            exit 1
+          fi
+          
+          echo "✅ No real secrets found in .env.example" 

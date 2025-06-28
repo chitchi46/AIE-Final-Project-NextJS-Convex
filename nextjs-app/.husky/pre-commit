@@ -1,0 +1,74 @@
+#!/bin/sh
+
+# 機密情報の検出パターン
+echo "🔍 Checking for sensitive information..."
+
+# 基本的な機密情報パターンチェック
+SENSITIVE_PATTERNS=(
+  # JWT Secret（デフォルト値）
+  "your-secret-key-for-jwt-authentication"
+  
+  # OpenAI APIキー
+  "sk-[a-zA-Z0-9]{20,}"
+  "sk-proj-[a-zA-Z0-9]{40,}"
+  
+  # Convex関連
+  "cnx_[a-zA-Z0-9]{20,}"
+  
+  # 一般的なトークンパターン
+  "token[\"']\s*[:=]\s*[\"'][a-zA-Z0-9_\-]{20,}"
+  "secret[\"']\s*[:=]\s*[\"'][a-zA-Z0-9_\-]{20,}"
+  "password[\"']\s*[:=]\s*[\"'][^\"']{8,}"
+  
+  # Base64エンコードされた機密情報
+  "Bearer\s+[A-Za-z0-9+/]{40,}={0,2}"
+)
+
+# ステージングされたファイルをチェック
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|ts|tsx|json|env|txt)$' | grep -v '.env.example')
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+# 各パターンをチェック
+for pattern in "${SENSITIVE_PATTERNS[@]}"; do
+  FOUND=$(echo "$STAGED_FILES" | xargs -I {} git diff --cached {} | grep -E "$pattern" || true)
+  
+  if [ ! -z "$FOUND" ]; then
+    echo "❌ Potential sensitive information detected!"
+    echo "Pattern: $pattern"
+    echo "Please remove sensitive data before committing."
+    echo ""
+    echo "Tips:"
+    echo "- Use environment variables for secrets"
+    echo "- Add sensitive files to .gitignore"
+    echo "- Use .env.example for templates"
+    exit 1
+  fi
+done
+
+# 特定のファイルが含まれていないかチェック
+FORBIDDEN_FILES=(
+  ".env"
+  ".env.local"
+  ".env.production"
+  "cookies.txt"
+  "*.pem"
+  "*.key"
+  "*.cert"
+)
+
+for file in "${FORBIDDEN_FILES[@]}"; do
+  if echo "$STAGED_FILES" | grep -q "$file"; then
+    echo "❌ Forbidden file detected: $file"
+    echo "This file should not be committed!"
+    exit 1
+  fi
+done
+
+# テストを実行
+echo "🧪 Running tests..."
+npm test -- --passWithNoTests
+
+echo "✅ Pre-commit checks passed!"
