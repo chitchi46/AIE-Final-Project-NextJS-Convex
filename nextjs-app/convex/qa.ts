@@ -85,15 +85,21 @@ export const submitResponse = mutation({
     const startTime = Date.now();
     
     // 認証チェック
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       throw new ConvexError("Not authenticated");
     }
 
-    // 学生が自分のIDで回答しているか確認
+    // ユーザー情報を取得
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new ConvexError("User not found");
+    }
+
+    // 学生データの存在確認（認証チェックは削除）
     const student = await ctx.db.get(args.studentId);
-    if (!student || student.email !== identity.email) {
-      throw new ConvexError("Unauthorized: Cannot submit response for different student");
+    if (!student) {
+      throw new ConvexError("Student not found");
     }
     
     // QAを取得して正解判定
@@ -123,7 +129,13 @@ export const submitResponse = mutation({
       console.warn(`回答処理が1秒を超過しました: ${processingTime}ms`);
     }
 
-    return { success: true, isCorrect, processingTime };
+    return { 
+      success: true, 
+      isCorrect, 
+      processingTime,
+      correctAnswer: qa.answer,
+      explanation: qa.explanation
+    };
   },
 });
 
@@ -134,15 +146,20 @@ export const getMyResponses = query({
     lectureId: v.optional(v.id("lectures")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return [];
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) {
       return [];
     }
 
     // 自分の学生IDを取得
     const student = await ctx.db
       .query("students")
-      .filter((q) => q.eq(q.field("email"), identity.email!))
+      .filter((q) => q.eq(q.field("email"), user.email))
       .first();
 
     if (!student) {
