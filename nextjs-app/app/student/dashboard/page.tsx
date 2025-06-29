@@ -30,7 +30,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 
 export default function StudentDashboardPage() {
-  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const router = useRouter();
   const getOrCreateStudent = useMutation(api.students.getOrCreateStudent);
   const [studentId, setStudentId] = useState<Id<"students"> | null>(null);
@@ -90,7 +90,7 @@ export default function StudentDashboardPage() {
     
     const testStudentId = "jh7b12sd540bm78we4czrjftc57jp2p2" as Id<"students">;
     
-    return <DashboardContent user={testUser} studentId={testStudentId} />;
+    return <DashboardContent user={testUser} studentId={testStudentId} logout={logout} />;
   }
 
   // データローディング中
@@ -102,15 +102,15 @@ export default function StudentDashboardPage() {
     );
   }
 
-  return <DashboardContent user={user} studentId={studentId} />;
+  return <DashboardContent user={user} studentId={studentId} logout={logout} />;
 }
 
 // ダッシュボードコンテンツを別コンポーネントに分離
-function DashboardContent({ user, studentId }: { 
+function DashboardContent({ user, studentId, logout }: { 
   user: { _id: string; id: string; email: string; name: string; role: string }, 
-  studentId: Id<"students"> 
+  studentId: Id<"students">,
+  logout: () => void
 }) {
-  const { logout } = useAuth();
   const stats = useQuery(api.stats.statsByStudent, { studentId });
   const lectures = useQuery(api.lectures.listLectures, {});
   const learningHistory = useQuery(api.qa.getLearningHistory, { studentId, limit: 20 });
