@@ -25,27 +25,39 @@ import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 export default function PersonalizedResultsPage() {
   const params = useParams();
   const router = useRouter();
   const lectureId = params.id as Id<"lectures">;
+  const { user, isLoading: authLoading } = useAuth();
 
-  // 仮の学生ID（実際は認証システムから取得）
   const [studentId, setStudentId] = useState<Id<"students"> | null>(null);
   const getOrCreateStudent = useMutation(api.students.getOrCreateStudent);
 
+  // 学生IDを取得または作成
   useEffect(() => {
     const initStudent = async () => {
-      const studentData = {
-        email: "student@example.com",
-        name: "テスト学生",
-      };
-      const id = await getOrCreateStudent(studentData);
-      setStudentId(id);
+      if (!user) return;
+      
+      try {
+        const id = await getOrCreateStudent({
+          email: user.email,
+          name: user.name,
+        });
+        setStudentId(id);
+      } catch (error) {
+        console.error("学生データの初期化に失敗:", error);
+        toast.error("学生データの初期化に失敗しました");
+      }
     };
-    initStudent();
-  }, [getOrCreateStudent]);
+    
+    if (user && !authLoading) {
+      initStudent();
+    }
+  }, [user, authLoading, getOrCreateStudent]);
 
   // 学習履歴を取得
   const responses = useQuery(

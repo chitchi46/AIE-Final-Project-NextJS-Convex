@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash, Eye, EyeOff, Plus, BarChart } from "lucide-react";
+import { Pencil, Trash, Eye, EyeOff, Plus, BarChart, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthGuard } from "@/components/auth-guard";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -40,7 +40,7 @@ export default function QAManagementPage() {
 
   // 講義一覧を取得（認証状態を考慮）
   const lectures = useQuery(
-    api.lectures.listMyLectures,
+    api.lectures.listLectures,
     !authLoading && user ? {} : "skip"
   );
   
@@ -192,6 +192,18 @@ export default function QAManagementPage() {
   return (
     <AuthGuard requiredRole="teacher">
       <div className="container mx-auto p-6">
+        {/* ダッシュボードに戻るボタン */}
+        <div className="mb-4">
+          <Button
+            variant="ghost"
+            onClick={() => router.push('/dashboard')}
+            className="mb-4"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            ダッシュボードに戻る
+          </Button>
+        </div>
+
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2">QA管理</h1>
           <p className="text-gray-600">講義のQAを管理・編集できます</p>

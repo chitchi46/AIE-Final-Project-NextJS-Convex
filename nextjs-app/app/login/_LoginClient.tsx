@@ -26,7 +26,7 @@ export default function LoginClient() {
         flow: "signIn",
       });
       toast.success("ログインに成功しました");
-      router.push("/dashboard");
+      router.push("/");
     } catch (err) {
       console.error(err);
       toast.error("ログインに失敗しました");

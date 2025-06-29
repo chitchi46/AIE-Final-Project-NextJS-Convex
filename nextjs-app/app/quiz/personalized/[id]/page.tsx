@@ -17,27 +17,38 @@ import { Id } from "@/convex/_generated/dataModel";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function PersonalizedQuizPage() {
   const params = useParams();
   const router = useRouter();
   const lectureId = params.id as Id<"lectures">;
+  const { user, isLoading: authLoading } = useAuth();
 
-  // 仮の学生ID（実際は認証システムから取得）
   const [studentId, setStudentId] = useState<Id<"students"> | null>(null);
   const getOrCreateStudent = useMutation(api.students.getOrCreateStudent);
 
+  // 学生IDを取得または作成
   useEffect(() => {
     const initStudent = async () => {
-      const studentData = {
-        email: "student@example.com",
-        name: "テスト学生",
-      };
-      const id = await getOrCreateStudent(studentData);
-      setStudentId(id);
+      if (!user) return;
+      
+      try {
+        const id = await getOrCreateStudent({
+          email: user.email,
+          name: user.name,
+        });
+        setStudentId(id);
+      } catch (error) {
+        console.error("学生データの初期化に失敗:", error);
+        toast.error("学生データの初期化に失敗しました");
+      }
     };
-    initStudent();
-  }, [getOrCreateStudent]);
+    
+    if (user && !authLoading) {
+      initStudent();
+    }
+  }, [user, authLoading, getOrCreateStudent]);
 
   // パーソナライズされたQ&Aを取得
   const personalizedData = useQuery(
@@ -57,7 +68,7 @@ export default function PersonalizedQuizPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [responses, setResponses] = useState<Array<{ qaId: string; isCorrect: boolean }>>([]);
 
-  if (!personalizedData || !lecture || !studentId) {
+  if (authLoading || !user || !personalizedData || !lecture || !studentId) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center">

@@ -111,14 +111,32 @@ export const submitResponse = mutation({
     // 正解判定（大文字小文字を区別しない）
     const isCorrect = qa.answer.toLowerCase().trim() === args.answer.toLowerCase().trim();
 
-    // 回答を保存
-    const responseId = await ctx.db.insert("responses", {
+    // 既存の回答を確認
+    const existingResponse = await ctx.db
+      .query("responses")
+      .withIndex("by_student", q => q.eq("studentId", args.studentId))
+      .filter(q => q.eq(q.field("qaId"), args.qaId))
+      .first();
+
+    let responseId;
+    if (existingResponse) {
+      // 既存の回答がある場合は更新
+      await ctx.db.patch(existingResponse._id, {
+        answer: args.answer,
+        isCorrect,
+        timestamp: Date.now(),
+      });
+      responseId = existingResponse._id;
+    } else {
+      // 新規回答の場合は作成
+      responseId = await ctx.db.insert("responses", {
       qaId: args.qaId,
       studentId: args.studentId,
       answer: args.answer,
       isCorrect,
       timestamp: Date.now(),
     });
+    }
 
     // 処理時間を計測
     const processingTime = Date.now() - startTime;
@@ -134,7 +152,8 @@ export const submitResponse = mutation({
       isCorrect, 
       processingTime,
       correctAnswer: qa.answer,
-      explanation: qa.explanation
+      explanation: qa.explanation,
+      isUpdate: !!existingResponse
     };
   },
 });

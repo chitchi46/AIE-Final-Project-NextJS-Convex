@@ -23,7 +23,7 @@ export default function RegisterClient(){
   try{
    await signIn("password",{email:formData.email,password:formData.password,name:formData.name,role:formData.role,flow:"signUp"});
    toast.success("登録に成功しました");
-   router.push(formData.role==="teacher"?"/dashboard":"/student/dashboard");
+   router.push("/");
   }catch(err){console.error(err);toast.error("登録に失敗しました");}
   finally{setIsLoading(false);} };
  return(

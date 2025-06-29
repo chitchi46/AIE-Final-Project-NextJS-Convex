@@ -46,6 +46,7 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/auth-guard";
+import { Suspense } from "react";
 
 // 仮のチャートデータ
 const generateChartData = () => {
@@ -63,9 +64,7 @@ function DashboardContent() {
     setMounted(true);
   }, []);
 
-  const lectures = useQuery(api.lectures.listLectures, {
-    createdBy: user?.id // ユーザーIDがある場合はフィルタリング、なければ全件取得
-  });
+  const lectures = useQuery(api.lectures.listLectures);
 
   const handleCreateSampleData = async () => {
     if (!user) {
@@ -464,15 +463,9 @@ function DashboardPageContent() {
 }
 
 export default function DashboardPage() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return <DashboardSkeleton />;
-  }
-
-  return <DashboardPageContent />;
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardPageContent />
+    </Suspense>
+  );
 } 

@@ -23,17 +23,20 @@ import {
   RefreshCw,
   BarChart,
   Target,
-  BookOpen
+  BookOpen,
+  ArrowLeft
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 export default function ImprovementsPage() {
+  const router = useRouter();
   const { toast } = useToast();
   const [selectedLecture, setSelectedLecture] = useState<Id<"lectures"> | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
   // 講義一覧を取得
-  const lectures = useQuery(api.lectures.listMyLectures);
+  const lectures = useQuery(api.lectures.listLectures);
   
   // 選択された講義の改善提案を取得
   const suggestions = useQuery(
@@ -114,6 +117,18 @@ export default function ImprovementsPage() {
   return (
     <AuthGuard requiredRole="teacher">
       <div className="container mx-auto p-6">
+        {/* ダッシュボードに戻るボタン */}
+        <div className="mb-4">
+          <Button
+            variant="ghost"
+            onClick={() => router.push('/dashboard')}
+            className="mb-4"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            ダッシュボードに戻る
+          </Button>
+        </div>
+
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
             <Lightbulb className="h-8 w-8 text-yellow-500" />
