@@ -145,12 +145,7 @@ export default function QuizPage() {
         });
       }
 
-      // 1秒後に次の問題へ自動的に進む（最後の問題でない場合）
-      if (currentIndex < qas.length - 1) {
-        setTimeout(() => {
-          handleNext();
-        }, 1500);
-      }
+      // 自動進行は無効化 - ユーザーが明示的に「次へ」ボタンを押すまで待機
     } catch (error) {
       const totalTime = Date.now() - submitStartTime;
       console.error("回答送信エラー:", error);

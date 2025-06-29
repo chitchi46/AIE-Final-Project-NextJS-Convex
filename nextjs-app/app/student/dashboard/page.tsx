@@ -18,7 +18,8 @@ import {
   XCircle,
   Award,
   BarChart3,
-  LogIn
+  LogIn,
+  LogOut
 } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
@@ -109,10 +110,12 @@ function DashboardContent({ user, studentId }: {
   user: { _id: string; id: string; email: string; name: string; role: string }, 
   studentId: Id<"students"> 
 }) {
+  const { logout } = useAuth();
   const stats = useQuery(api.stats.statsByStudent, { studentId });
   const lectures = useQuery(api.lectures.listLectures, {});
+  const learningHistory = useQuery(api.qa.getLearningHistory, { studentId, limit: 20 });
 
-  if (!stats || !lectures) {
+  if (!stats || !lectures || !learningHistory) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <LoadingSpinner size="lg" text="データを読み込み中..." />
@@ -144,8 +147,20 @@ function DashboardContent({ user, studentId }: {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">学習ダッシュボード</h1>
-          <p className="text-gray-600">あなたの学習進捗を確認しましょう</p>
+          <div className="flex justify-between items-center mb-2">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">学習ダッシュボード</h1>
+              <p className="text-gray-600 mt-2">あなたの学習進捗を確認しましょう</p>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={logout}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              ログアウト
+            </Button>
+          </div>
         </motion.div>
 
         {/* 統計カード */}
@@ -324,15 +339,135 @@ function DashboardContent({ user, studentId }: {
             </TabsContent>
 
             <TabsContent value="history" className="space-y-4">
-              <Card className="shadow-lg border-0">
-                <CardContent className="text-center py-12">
-                  <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">学習履歴がここに表示されます</p>
-                  <p className="text-sm text-gray-500 mt-2">
-                    クイズに挑戦すると、あなたの成績が記録されます
-                  </p>
-                </CardContent>
-              </Card>
+              {learningHistory.statistics.totalAttempts === 0 ? (
+                <Card className="shadow-lg border-0">
+                  <CardContent className="text-center py-12">
+                    <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">学習履歴がまだありません</p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      クイズに挑戦すると、あなたの成績が記録されます
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  {/* 学習統計サマリー */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <Card className="shadow-lg border-0">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">総回答数</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-2xl font-bold">{learningHistory.statistics.totalAttempts}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="shadow-lg border-0">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">正解数</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-2xl font-bold text-green-600">{learningHistory.statistics.correctAttempts}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="shadow-lg border-0">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">正答率</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-2xl font-bold">{learningHistory.statistics.accuracy}%</p>
+                        <Progress value={learningHistory.statistics.accuracy} className="mt-2" />
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* 難易度別統計 */}
+                  <Card className="shadow-lg border-0 mb-6">
+                    <CardHeader>
+                      <CardTitle className="text-lg">難易度別成績</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {Object.entries(learningHistory.statistics.difficultyStats).map(([difficulty, stats]) => {
+                          const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+                          const difficultyLabels = { easy: "易", medium: "中", hard: "難" };
+                          const difficultyColors = { easy: "bg-green-100 text-green-800", medium: "bg-yellow-100 text-yellow-800", hard: "bg-red-100 text-red-800" };
+                          
+                          return (
+                            <div key={difficulty} className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <Badge className={difficultyColors[difficulty as keyof typeof difficultyColors]}>
+                                  {difficultyLabels[difficulty as keyof typeof difficultyLabels]}
+                                </Badge>
+                                <span className="text-sm">{stats.correct}/{stats.total} 正解</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{accuracy}%</span>
+                                <Progress value={accuracy} className="w-16" />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 最近の回答履歴 */}
+                  <Card className="shadow-lg border-0">
+                    <CardHeader>
+                      <CardTitle className="text-lg">最近の回答履歴</CardTitle>
+                      <CardDescription>直近20件の回答結果</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {learningHistory.history.map((item, index) => (
+                          <div key={item.responseId} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50">
+                            <div className="flex-shrink-0 mt-1">
+                              {item.isCorrect ? (
+                                <CheckCircle className="h-5 w-5 text-green-600" />
+                              ) : (
+                                <XCircle className="h-5 w-5 text-red-600" />
+                              )}
+                            </div>
+                            <div className="flex-grow min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline" className="text-xs">
+                                  {item.lectureTitle}
+                                </Badge>
+                                <Badge 
+                                  className={`text-xs ${
+                                    item.difficulty === "easy" ? "bg-green-100 text-green-800" :
+                                    item.difficulty === "medium" ? "bg-yellow-100 text-yellow-800" :
+                                    "bg-red-100 text-red-800"
+                                  }`}
+                                >
+                                  {item.difficulty === "easy" ? "易" : item.difficulty === "medium" ? "中" : "難"}
+                                </Badge>
+                              </div>
+                              <p className="text-sm font-medium truncate">{item.question}</p>
+                              <p className="text-xs text-gray-600 mt-1">
+                                あなたの回答: {item.answer}
+                              </p>
+                              {!item.isCorrect && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  正解: {item.correctAnswer}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex-shrink-0 text-xs text-gray-500">
+                              {new Date(item.timestamp).toLocaleDateString('ja-JP', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         </motion.div>
