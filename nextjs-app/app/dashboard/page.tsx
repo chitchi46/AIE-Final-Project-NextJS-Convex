@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -48,24 +48,25 @@ import { toast } from "sonner";
 import { AuthGuard } from "@/components/auth-guard";
 import { Suspense } from "react";
 
-// 仮のチャートデータ
-const generateChartData = () => {
-  return Array.from({ length: 7 }, (_, i) => ({
-    value: Math.floor(Math.random() * 50) + 20,
-  }));
-};
-
 function DashboardContent() {
   const { user, logout } = useAuth();
   const [mounted, setMounted] = useState(false);
   const createSampleLecture = useMutation(api.lectures.createSampleLecture);
+  
+  // 前回のデータを保存するためのstate
+  const [previousStats, setPreviousStats] = useState<{
+    lectureCount: number;
+    qaCount: number;
+    responseCount: number;
+    timestamp: number;
+  } | null>(null);
   
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const lectures = useQuery(api.lectures.listLectures);
-
+  
   const handleCreateSampleData = async () => {
     if (!user) {
       toast.error("ログインが必要です");
@@ -81,6 +82,140 @@ function DashboardContent() {
     }
   };
 
+  // 現在の統計計算をuseMemoで最適化
+  const currentStats = useMemo(() => {
+    if (!lectures) return null;
+    
+    const totalQAs = lectures.reduce((sum, l) => sum + (l.qaCount || 0), 0);
+    const totalResponses = lectures.reduce((sum, l) => sum + (l.responseCount || 0), 0);
+    
+    return {
+      lectureCount: lectures.length,
+      qaCount: totalQAs,
+      responseCount: totalResponses,
+      timestamp: Date.now()
+    };
+  }, [lectures]);
+
+  // 実データから時系列チャートデータを生成
+  const generateRealChartData = useMemo(() => {
+    if (!lectures) return [];
+    
+    // 講義の作成日時順にソート
+    const sortedLectures = [...lectures].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    
+    // 過去7日間のデータポイントを生成
+    const days = 7;
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    
+    return Array.from({ length: days }, (_, i) => {
+      const targetDate = now - (days - 1 - i) * oneDayMs;
+      
+      // その日までに作成された講義数
+      const lecturesUntilDate = sortedLectures.filter(l => (l.createdAt || 0) <= targetDate).length;
+      
+      return {
+        value: lecturesUntilDate,
+        date: new Date(targetDate).toLocaleDateString(),
+      };
+    });
+  }, [lectures]);
+
+  // QA数の時系列データ
+  const generateQAChartData = useMemo(() => {
+    if (!lectures) return [];
+    
+    const days = 7;
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    
+    return Array.from({ length: days }, (_, i) => {
+      const targetDate = now - (days - 1 - i) * oneDayMs;
+      
+      // その日までのQ&A総数
+      const qaCount = lectures
+        .filter(l => (l.createdAt || 0) <= targetDate)
+        .reduce((sum, l) => sum + (l.qaCount || 0), 0);
+      
+      return {
+        value: qaCount,
+        date: new Date(targetDate).toLocaleDateString(),
+      };
+    });
+  }, [lectures]);
+
+  // 回答数の時系列データ
+  const generateResponseChartData = useMemo(() => {
+    if (!lectures) return [];
+    
+    const days = 7;
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    
+    return Array.from({ length: days }, (_, i) => {
+      const targetDate = now - (days - 1 - i) * oneDayMs;
+      
+      // その日までの回答総数
+      const responseCount = lectures
+        .filter(l => (l.createdAt || 0) <= targetDate)
+        .reduce((sum, l) => sum + (l.responseCount || 0), 0);
+      
+      return {
+        value: responseCount,
+        date: new Date(targetDate).toLocaleDateString(),
+      };
+    });
+  }, [lectures]);
+
+  // トレンド計算
+  const calculateTrend = (current: number, previous: number): number => {
+    if (previous === 0) return 0;
+    return Math.round(((current - previous) / previous) * 100);
+  };
+
+  // トレンド値をuseMemoで計算
+  const trendValues = useMemo(() => {
+    if (!currentStats || !previousStats) {
+      return { lecturesTrend: 0, qaTrend: 0, responsesTrend: 0 };
+    }
+
+    return {
+      lecturesTrend: calculateTrend(currentStats.lectureCount, previousStats.lectureCount),
+      qaTrend: calculateTrend(currentStats.qaCount, previousStats.qaCount),
+      responsesTrend: calculateTrend(currentStats.responseCount, previousStats.responseCount)
+    };
+  }, [currentStats, previousStats]);
+
+  // 初回または24時間経過後に現在の値を前回データとして保存
+  useEffect(() => {
+    if (!currentStats) return;
+    
+    const shouldUpdateStats = !previousStats || 
+      (Date.now() - previousStats.timestamp > 24 * 60 * 60 * 1000); // 24時間
+    
+    if (shouldUpdateStats) {
+      setPreviousStats(currentStats);
+    }
+  }, [currentStats, previousStats]);
+  
+  // データ変更検知（講義の追加・削除時）
+  useEffect(() => {
+    if (!currentStats || !previousStats) return;
+    
+    const hasChanges = currentStats.lectureCount !== previousStats.lectureCount || 
+                      currentStats.qaCount !== previousStats.qaCount || 
+                      currentStats.responseCount !== previousStats.responseCount;
+    
+    if (hasChanges) {
+      // 変更があった場合、2秒後に前回データを更新
+      const timer = setTimeout(() => {
+        setPreviousStats(currentStats);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentStats, previousStats]);
+
   if (!mounted) {
     return null;
   }
@@ -89,14 +224,11 @@ function DashboardContent() {
     return <DashboardSkeleton />;
   }
 
-  // 統計計算
-  const totalQAs = lectures.reduce((sum, l) => sum + (l.qaCount || 0), 0);
-  const totalResponses = lectures.reduce((sum, l) => sum + (l.responseCount || 0), 0);
-  
-  // トレンド計算（仮の実装）
-  const lecturesTrend = 12; // +12%
-  const qaTrend = -5; // -5%
-  const responsesTrend = 23; // +23%
+  if (!currentStats) {
+    return <DashboardSkeleton />;
+  }
+
+  const { lecturesTrend, qaTrend, responsesTrend } = trendValues;
 
   return (
     <AuthGuard requiredRole="teacher">
@@ -159,26 +291,26 @@ function DashboardContent() {
           >
             <MetricCard
               title="総講義数"
-              value={lectures.length}
+              value={currentStats.lectureCount}
               icon={<FileText className="h-5 w-5" />}
               trend={lecturesTrend}
-              chartData={generateChartData()}
+              chartData={generateRealChartData}
               color="indigo"
             />
             <MetricCard
               title="総Q&A数"
-              value={totalQAs}
+              value={currentStats.qaCount}
               icon={<BarChart3 className="h-5 w-5" />}
               trend={qaTrend}
-              chartData={generateChartData()}
+              chartData={generateQAChartData}
               color="emerald"
             />
             <MetricCard
               title="総回答数"
-              value={totalResponses}
+              value={currentStats.responseCount}
               icon={<Users className="h-5 w-5" />}
               trend={responsesTrend}
-              chartData={generateChartData()}
+              chartData={generateResponseChartData}
               color="amber"
             />
           </motion.div>
@@ -195,7 +327,7 @@ function DashboardContent() {
               <h2 className="text-2xl font-bold text-slate-900">講義一覧</h2>
             </div>
 
-            {lectures.length === 0 ? (
+            {currentStats.lectureCount === 0 ? (
               <EmptyState onCreateSampleData={handleCreateSampleData} />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

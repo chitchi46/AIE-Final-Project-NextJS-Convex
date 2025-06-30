@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 
-// 講義別統計
+// 講義別統計（最適化版）
 export const statsByLecture = query({
   args: {
     lectureId: v.id("lectures"),
@@ -14,33 +14,65 @@ export const statsByLecture = query({
       .withIndex("by_lecture", q => q.eq("lectureId", args.lectureId))
       .collect();
 
-    // 各QAの回答を集計
-    const stats = await Promise.all(
-      qas.map(async (qa) => {
-        const responses = await ctx.db
-          .query("responses")
-          .withIndex("by_qa", q => q.eq("qaId", qa._id))
-          .collect();
+    if (qas.length === 0) {
+      return {
+        lectureId: args.lectureId,
+        overallStats: {
+          totalQuestions: 0,
+          totalResponses: 0,
+          totalCorrect: 0,
+          accuracy: 0,
+        },
+        difficultyStats: {
+          easy: { count: 0, averageAccuracy: 0, totalResponses: 0, correctResponses: 0, accuracy: 0 },
+          medium: { count: 0, averageAccuracy: 0, totalResponses: 0, correctResponses: 0, accuracy: 0 },
+          hard: { count: 0, averageAccuracy: 0, totalResponses: 0, correctResponses: 0, accuracy: 0 },
+        },
+        questionStats: [],
+      };
+    }
 
-        const totalResponses = responses.length;
-        const correctResponses = responses.filter(r => r.isCorrect).length;
-        const accuracy = totalResponses > 0 ? correctResponses / totalResponses : 0;
+    // QAのIDリストを作成
+    const qaIds = qas.map(qa => qa._id);
 
-        return {
-          qaId: qa._id,
-          question: qa.question,
-          difficulty: qa.difficulty,
-          totalResponses,
-          correctResponses,
-          accuracy,
-        };
-      })
-    );
+    // 全ての回答を一度に取得（N+1問題の解消）
+    const allResponses = await ctx.db
+      .query("responses")
+      .collect();
+
+    // 講義に関連する回答のみをフィルタリング
+    const lectureResponses = allResponses.filter(r => qaIds.includes(r.qaId));
+
+    // 回答をQA IDでグループ化
+    const responsesByQa = new Map<string, typeof lectureResponses>();
+    for (const response of lectureResponses) {
+      if (!responsesByQa.has(response.qaId)) {
+        responsesByQa.set(response.qaId, []);
+      }
+      responsesByQa.get(response.qaId)!.push(response);
+    }
+
+    // 各QAの統計を計算
+    const stats = qas.map((qa) => {
+      const responses = responsesByQa.get(qa._id) || [];
+      const totalResponses = responses.length;
+      const correctResponses = responses.filter(r => r.isCorrect).length;
+      const accuracy = totalResponses > 0 ? (correctResponses / totalResponses) * 100 : 0;
+
+      return {
+        qaId: qa._id,
+        question: qa.question,
+        difficulty: qa.difficulty,
+        totalResponses,
+        correctResponses,
+        accuracy: Math.round(accuracy * 100) / 100, // 小数点2桁
+      };
+    });
 
     // 全体統計
     const totalResponses = stats.reduce((sum, s) => sum + s.totalResponses, 0);
     const totalCorrect = stats.reduce((sum, s) => sum + s.correctResponses, 0);
-    const overallAccuracy = totalResponses > 0 ? totalCorrect / totalResponses : 0;
+    const overallAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses) * 100 : 0;
 
     // 難易度別統計
     const difficultyStats = {
@@ -55,7 +87,7 @@ export const statsByLecture = query({
         totalQuestions: qas.length,
         totalResponses,
         totalCorrect,
-        accuracy: overallAccuracy,
+        accuracy: Math.round(overallAccuracy * 100) / 100, // 小数点2桁
       },
       difficultyStats,
       questionStats: stats,
@@ -108,7 +140,8 @@ export const statsByStudent = query({
     // 全体統計
     const totalResponses = responseStats.length;
     const correctResponses = responseStats.filter(r => r.isCorrect).length;
-    const accuracy = totalResponses > 0 ? correctResponses / totalResponses : 0;
+    // 正答率を0-100のパーセンテージで統一
+    const accuracy = totalResponses > 0 ? (correctResponses / totalResponses) * 100 : 0;
 
     // 難易度別統計
     const difficultyBreakdown = {
@@ -122,7 +155,7 @@ export const statsByStudent = query({
       overallStats: {
         totalResponses,
         correctResponses,
-        accuracy,
+        accuracy: Math.round(accuracy * 100) / 100, // 小数点2桁
       },
       difficultyStats: {
         easy: calculateResponseStats(difficultyBreakdown.easy),
@@ -136,15 +169,21 @@ export const statsByStudent = query({
   },
 });
 
-// ヘルパー関数
+// ヘルパー関数（修正版）
 function calculateDifficultyStats(stats: any[]) {
   const total = stats.length;
-  if (total === 0) return { count: 0, averageAccuracy: 0 };
+  if (total === 0) return { count: 0, averageAccuracy: 0, totalResponses: 0, correctResponses: 0 };
   
-  const totalAccuracy = stats.reduce((sum, s) => sum + s.accuracy, 0);
+  const totalResponses = stats.reduce((sum, s) => sum + s.totalResponses, 0);
+  const totalCorrect = stats.reduce((sum, s) => sum + s.correctResponses, 0);
+  const averageAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses) * 100 : 0;
+  
   return {
     count: total,
-    averageAccuracy: totalAccuracy / total,
+    averageAccuracy: Math.round(averageAccuracy * 100) / 100, // 小数点2桁
+    totalResponses,
+    correctResponses: totalCorrect,
+    accuracy: Math.round(averageAccuracy * 100) / 100, // 互換性のため追加
   };
 }
 
@@ -153,11 +192,13 @@ function calculateResponseStats(responses: any[]) {
   if (total === 0) return { count: 0, accuracy: 0 };
   
   const correct = responses.filter(r => r.isCorrect).length;
+  const accuracy = (correct / total) * 100;
+  
   return {
     count: total,
-    accuracy: correct / total,
+    accuracy: Math.round(accuracy * 100) / 100, // 小数点2桁
   };
-} 
+}
 
 // 高速な結果集計（5秒以内保証）
 export const getQuickStats = query({
@@ -411,4 +452,127 @@ export const getCachedStats = query({
       };
     }
   },
-}); 
+});
+
+// 全講義の統合統計
+export const getAllLecturesStats = query({
+  args: {},
+  handler: async (ctx) => {
+    // 全ての講義を取得
+    const lectures = await ctx.db.query("lectures").collect();
+    
+    if (lectures.length === 0) {
+      return {
+        totalStudents: 0,
+        overallAccuracy: 0,
+        difficultyDistribution: {
+          easy: 0,
+          medium: 0,
+          hard: 0,
+        },
+        lectureDetails: [],
+      };
+    }
+
+    // 全てのQAを取得
+    const allQAs = await ctx.db.query("qa_templates").collect();
+    
+    // 全ての回答を取得
+    const allResponses = await ctx.db.query("responses").collect();
+    
+    // ユニークな学生数を計算
+    const uniqueStudentIds = new Set(allResponses.map(r => r.studentId));
+    const totalStudents = uniqueStudentIds.size;
+    
+    // 全体正答率を計算
+    const totalCorrectResponses = allResponses.filter(r => r.isCorrect).length;
+    const totalResponseCount = allResponses.length;
+    const overallAccuracy = totalResponseCount > 0 ? 
+      (totalCorrectResponses / totalResponseCount) * 100 : 0;
+    
+    // 難易度分布を計算（実際のQAデータから）
+    const difficultyCount = {
+      easy: 0,
+      medium: 0,
+      hard: 0,
+    };
+    
+    allQAs.forEach(qa => {
+      const difficulty = determineDifficulty(qa.question, qa.correctAnswer);
+      difficultyCount[difficulty]++;
+    });
+    
+    const totalQAs = allQAs.length;
+    const difficultyDistribution = {
+      easy: totalQAs > 0 ? Math.round((difficultyCount.easy / totalQAs) * 100) : 0,
+      medium: totalQAs > 0 ? Math.round((difficultyCount.medium / totalQAs) * 100) : 0,
+      hard: totalQAs > 0 ? Math.round((difficultyCount.hard / totalQAs) * 100) : 0,
+    };
+    
+    // 講義別詳細データ
+    const lectureDetails = await Promise.all(
+      lectures.map(async (lecture) => {
+        const lectureQAs = allQAs.filter(qa => qa.lectureId === lecture._id);
+        const lectureResponses = allResponses.filter(r => 
+          lectureQAs.some(qa => qa._id === r.qaId)
+        );
+        
+        const lectureCorrectResponses = lectureResponses.filter(r => r.isCorrect).length;
+        const lectureAccuracy = lectureResponses.length > 0 ? 
+          (lectureCorrectResponses / lectureResponses.length) * 100 : 0;
+        
+        // ユニークな学生数（この講義に回答した学生）
+        const lectureStudents = new Set(lectureResponses.map(r => r.studentId)).size;
+        
+        return {
+          lectureId: lecture._id,
+          title: lecture.title,
+          qaCount: lectureQAs.length,
+          responseCount: lectureResponses.length,
+          accuracy: Math.round(lectureAccuracy * 100) / 100,
+          studentCount: lectureStudents,
+        };
+      })
+    );
+    
+    return {
+      totalStudents,
+      overallAccuracy: Math.round(overallAccuracy * 100) / 100,
+      difficultyDistribution,
+      lectureDetails,
+    };
+  },
+});
+
+// 難易度判定のヘルパー関数
+function determineDifficulty(question: string, correctAnswer: string): 'easy' | 'medium' | 'hard' {
+  const questionLength = question.length;
+  const answerLength = correctAnswer.length;
+  
+  // 複雑な単語や専門用語の検出
+  const complexWords = ['について', '詳しく', '具体的', '比較', '分析', '評価', '論述'];
+  const hasComplexWords = complexWords.some(word => question.includes(word));
+  
+  if (questionLength < 50 && answerLength < 100 && !hasComplexWords) {
+    return 'easy';
+  } else if (questionLength < 100 && answerLength < 200) {
+    return 'medium';
+  } else {
+    return 'hard';
+  }
+}
+
+// 正答判定のヘルパー関数
+function isAnswerCorrect(userAnswer: string, correctAnswer: string): boolean {
+  // 簡易的な正答判定（実際にはより複雑な判定が必要）
+  const normalizeText = (text: string) => 
+    text.toLowerCase().replace(/[、。！？\s]/g, '');
+  
+  const normalizedUser = normalizeText(userAnswer);
+  const normalizedCorrect = normalizeText(correctAnswer);
+  
+  // 完全一致または部分一致で判定
+  return normalizedUser === normalizedCorrect || 
+         normalizedCorrect.includes(normalizedUser) ||
+         normalizedUser.includes(normalizedCorrect);
+} 

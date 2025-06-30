@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,16 +127,53 @@ function DashboardContent({ user, studentId, logout }: {
     ? Math.round((stats.overallStats.correctResponses / stats.overallStats.totalResponses) * 100) 
     : 0;
 
-  // 仮の進捗データ（実際はConvexから取得）
-  const progressData = [
-    { day: "月", score: 65 },
-    { day: "火", score: 72 },
-    { day: "水", score: 78 },
-    { day: "木", score: 85 },
-    { day: "金", score: 88 },
-    { day: "土", score: 92 },
-    { day: "今日", score: overallScore },
-  ];
+  // 実際の学習進捗データを生成（過去7日間） - 安全な実装
+  const generateProgressData = () => {
+    const days = 7;
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+    
+    return Array.from({ length: days }, (_, i) => {
+      const targetDate = now - (days - 1 - i) * oneDayMs;
+      const date = new Date(targetDate);
+      const dayLabel = i === days - 1 ? "今日" : dayNames[date.getDay()];
+      
+      // その日の回答から正答率を計算
+      let dayResponses = 0;
+      let dayCorrectResponses = 0;
+      
+      try {
+        dayResponses = stats.lectureStats.reduce((acc, lecture) => {
+          return acc + lecture.responses.filter(r => {
+            const responseDate = new Date(r.timestamp);
+            return responseDate.toDateString() === date.toDateString();
+          }).length;
+        }, 0);
+        
+        dayCorrectResponses = stats.lectureStats.reduce((acc, lecture) => {
+          return acc + lecture.responses.filter(r => {
+            const responseDate = new Date(r.timestamp);
+            return responseDate.toDateString() === date.toDateString() && r.isCorrect;
+          }).length;
+        }, 0);
+      } catch (error) {
+        console.warn('Error calculating daily stats:', error);
+      }
+      
+      const dayScore = dayResponses > 0 
+        ? Math.round((dayCorrectResponses / dayResponses) * 100)
+        : i === days - 1 ? overallScore : 0; // 今日は全体スコア、他の日はデータがなければ0
+      
+      return {
+        day: dayLabel,
+        score: dayScore,
+        responses: dayResponses
+      };
+    });
+  };
+
+  const progressData = generateProgressData();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
