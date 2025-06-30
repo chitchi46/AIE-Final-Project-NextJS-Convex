@@ -122,7 +122,7 @@ export function StudentLearningModal({
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-gray-600">正答率</p>
-                    <p className={\`text-2xl font-bold \${getAccuracyColor(studentStats.overallStats.accuracy)}\`}>
+                    <p className={`text-2xl font-bold ${getAccuracyColor(studentStats.overallStats.accuracy)}`}>
                       {studentStats.overallStats.accuracy.toFixed(1)}%
                     </p>
                   </div>
@@ -152,7 +152,7 @@ export function StudentLearningModal({
                     </div>
                     <div className="flex items-center gap-2">
                       <Progress value={stats.accuracy} className="w-24" />
-                      <span className={\`text-sm font-medium \${getAccuracyColor(stats.accuracy)}\`}>
+                      <span className={`text-sm font-medium ${getAccuracyColor(stats.accuracy)}`}>
                         {stats.accuracy.toFixed(1)}%
                       </span>
                     </div>

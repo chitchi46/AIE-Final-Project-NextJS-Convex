@@ -150,6 +150,22 @@ export const listQA = query({
     includeUnpublished: v.optional(v.boolean()), // 非公開も含めるか（教師用）
   },
   handler: async (ctx, args) => {
+    // 認証チェック（非公開QAを要求する場合）
+    if (args.includeUnpublished) {
+      const userId = await getAuthUserId(ctx);
+      if (userId) {
+        const user = await ctx.db.get(userId);
+        // 教師または管理者のみが非公開QAを見られる
+        if (!user || (user.role !== 'teacher' && user.role !== 'admin')) {
+          // 権限がない場合は、includeUnpublishedを無視
+          args = { ...args, includeUnpublished: false };
+        }
+      } else {
+        // 未認証の場合も、includeUnpublishedを無視
+        args = { ...args, includeUnpublished: false };
+      }
+    }
+
     let qas = await ctx.db
       .query("qa_templates")
       .withIndex("by_lecture", (q) => q.eq("lectureId", args.lectureId))
@@ -316,30 +332,38 @@ export const getLearningHistory = query({
       .order("desc")
       .take(limit);
 
-    // 各回答に対応するQ&Aと講義情報を取得
-    const historyWithDetails = await Promise.all(
-      responses.map(async (response) => {
-        const qa = await ctx.db.get(response.qaId);
-        if (!qa) return null;
-        
-        const lecture = await ctx.db.get(qa.lectureId);
-        if (!lecture) return null;
+    // QAと講義情報を一括取得（N+1問題の解消）
+    const qaIds = [...new Set(responses.map(r => r.qaId))];
+    const qas = await Promise.all(qaIds.map(id => ctx.db.get(id)));
+    const qaMap = new Map(qas.filter(qa => qa !== null).map(qa => [qa!._id, qa!]));
+    
+    // 講義IDを収集
+    const lectureIds = [...new Set(qas.filter(qa => qa !== null).map(qa => qa!.lectureId))];
+    const lectures = await Promise.all(lectureIds.map(id => ctx.db.get(id)));
+    const lectureMap = new Map(lectures.filter(lecture => lecture !== null).map(lecture => [lecture!._id, lecture!]));
+    
+    // 各回答に対応するQ&Aと講義情報をマッピング
+    const historyWithDetails = responses.map(response => {
+      const qa = qaMap.get(response.qaId);
+      if (!qa) return null;
+      
+      const lecture = lectureMap.get(qa.lectureId);
+      if (!lecture) return null;
 
-        return {
-          responseId: response._id,
-          timestamp: response.timestamp,
-          answer: response.answer,
-          isCorrect: response.isCorrect,
-          question: qa.question,
-          questionType: qa.questionType,
-          difficulty: qa.difficulty,
-          correctAnswer: qa.answer,
-          explanation: qa.explanation,
-          lectureTitle: lecture.title,
-          lectureId: lecture._id,
-        };
-      })
-    );
+      return {
+        responseId: response._id,
+        timestamp: response.timestamp,
+        answer: response.answer,
+        isCorrect: response.isCorrect,
+        question: qa.question,
+        questionType: qa.questionType,
+        difficulty: qa.difficulty,
+        correctAnswer: qa.answer,
+        explanation: qa.explanation,
+        lectureTitle: lecture.title,
+        lectureId: lecture._id,
+      };
+    });
 
     // nullを除外してフィルタリング
     const validHistory = historyWithDetails.filter(item => item !== null);
@@ -499,6 +523,7 @@ export const createQA = mutation({
     answer: v.string(),
     difficulty: v.union(v.literal("easy"), v.literal("medium"), v.literal("hard")),
     explanation: v.optional(v.string()),
+    isPublished: v.optional(v.boolean()), // 公開設定を追加
   },
   handler: async (ctx, args) => {
     const qaId = await ctx.db.insert("qa_templates", {
@@ -509,7 +534,7 @@ export const createQA = mutation({
       answer: args.answer,
       difficulty: args.difficulty,
       explanation: args.explanation,
-      isPublished: true, // デフォルトで公開
+      isPublished: args.isPublished !== false, // 未指定の場合はtrue
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

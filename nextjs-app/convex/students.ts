@@ -11,6 +11,38 @@ export const list = query({
   },
 });
 
+// 全ての学生を取得（教師・管理者のみ）
+export const getAllStudents = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    // 認証されたユーザーの情報を取得
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new ConvexError("User not found");
+    }
+
+    if (user.role !== "teacher" && user.role !== "admin") {
+      throw new ConvexError("Unauthorized: Only teachers and admins can view all students");
+    }
+
+    const students = await ctx.db.query("students").collect();
+    
+    // プライバシー保護のため、メールアドレスを部分的にマスク
+    return students.map(student => ({
+      _id: student._id,
+      name: student.name,
+      email: student.email.replace(/^(.{2}).*(@.*)$/, "$1***$2"),
+      createdAt: student.createdAt,
+      updatedAt: student.updatedAt,
+    }));
+  },
+});
+
 // 学生作成または取得（プライバシー保護付き）
 export const getOrCreateStudent = mutation({
   args: {
@@ -111,6 +143,43 @@ export const getStudentById = query({
       name: student.name,
       email: student.email.replace(/^(.{2}).*(@.*)$/, "$1***$2"), // メールアドレスを部分的にマスク
       createdAt: student.createdAt,
+    };
+  },
+});
+
+// 学生情報を取得（教師・管理者のみ）- getStudentのエイリアス
+export const getStudent = query({
+  args: {
+    studentId: v.id("students"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    // 認証されたユーザーの情報を取得
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new ConvexError("User not found");
+    }
+
+    if (user.role !== "teacher" && user.role !== "admin") {
+      throw new ConvexError("Unauthorized: Only teachers and admins can view student details");
+    }
+
+    const student = await ctx.db.get(args.studentId);
+    if (!student) {
+      return null;
+    }
+
+    // 完全な学生情報を返す（教師・管理者用）
+    return {
+      _id: student._id,
+      name: student.name,
+      email: student.email,
+      createdAt: student.createdAt,
+      updatedAt: student.updatedAt,
     };
   },
 });

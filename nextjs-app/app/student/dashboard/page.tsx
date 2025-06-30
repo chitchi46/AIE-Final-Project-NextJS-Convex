@@ -19,7 +19,8 @@ import {
   Award,
   BarChart3,
   LogIn,
-  LogOut
+  LogOut,
+  Brain
 } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
@@ -35,16 +36,12 @@ export default function StudentDashboardPage() {
   const getOrCreateStudent = useMutation(api.students.getOrCreateStudent);
   const [studentId, setStudentId] = useState<Id<"students"> | null>(null);
 
-  // 認証されていない場合
-  if (!isAuthenticated || !user) {
-    // 本番環境では認証なしアクセスを禁止
-    router.push("/login");
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <LoadingSpinner size="lg" text="ログインページにリダイレクト中..." />
-      </div>
-    );
-  }
+  useEffect(() => {
+    // 認証が完了し、かつ未認証の場合にリダイレクトを実行
+    if (!authLoading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   // 学生IDを取得または作成
   useEffect(() => {
@@ -72,8 +69,8 @@ export default function StudentDashboardPage() {
   );
   const lectures = useQuery(api.lectures.listLectures, {});
 
-  // 認証中のローディング
-  if (authLoading) {
+  // 認証中または未認証の場合はローディング画面を表示
+  if (authLoading || !isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <LoadingSpinner size="lg" text="認証情報を確認中..." />
@@ -177,14 +174,25 @@ function DashboardContent({ user, studentId, logout }: {
               <h1 className="text-3xl font-bold text-gray-800">学習ダッシュボード</h1>
               <p className="text-gray-600 mt-2">あなたの学習進捗を確認しましょう</p>
             </div>
-            <Button 
-              variant="outline" 
-              onClick={logout}
-              className="flex items-center gap-2"
-            >
-              <LogOut className="h-4 w-4" />
-              ログアウト
-            </Button>
+            <div className="flex gap-3">
+              <Button 
+                variant="secondary"
+                asChild
+              >
+                <Link href="/student/personalized-learning" className="flex items-center gap-2">
+                  <Brain className="h-4 w-4" />
+                  パーソナライズ学習
+                </Link>
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={logout}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                ログアウト
+              </Button>
+            </div>
           </div>
         </motion.div>
 

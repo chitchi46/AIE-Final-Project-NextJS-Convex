@@ -66,7 +66,7 @@ function DashboardContent() {
   }, []);
 
   const lectures = useQuery(api.lectures.listLectures);
-  
+
   const handleCreateSampleData = async () => {
     if (!user) {
       toast.error("ログインが必要です");
@@ -261,6 +261,12 @@ function DashboardContent() {
                   <Link href="/teacher/qa-management" className="flex items-center gap-2">
                     <ListChecks className="h-5 w-5" />
                     QA管理
+                  </Link>
+                </Button>
+                <Button size="lg" variant="secondary" className="shadow-lg hover:shadow-xl transition-all">
+                  <Link href="/teacher/student-analytics" className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    学生分析
                   </Link>
                 </Button>
                 <Button size="lg" variant="secondary" className="shadow-lg hover:shadow-xl transition-all">
@@ -484,12 +490,6 @@ function LectureCard({ lecture, index }: { lecture: any; index: number }) {
                 </Link>
               </Button>
             </div>
-            <Button asChild size="sm" variant="secondary" className="w-full">
-              <Link href={`/quiz/personalized/${lecture._id}`}>
-                <Brain className="mr-1 h-4 w-4" />
-                パーソナライズ学習
-              </Link>
-            </Button>
           </div>
         </CardContent>
       </Card>

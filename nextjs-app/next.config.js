@@ -1,6 +1,4 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+const nextConfig = {
   /* config options here */
   serverExternalPackages: ['convex'],
   // WSL2環境でのアクセスを可能にする
@@ -21,4 +19,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig; 

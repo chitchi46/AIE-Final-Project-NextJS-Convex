@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { ConvexError } from "convex/values";
 
 // 講義別統計（最適化版）
 export const statsByLecture = query({
@@ -122,20 +124,25 @@ export const statsByStudent = query({
       );
     }
 
+    // QAのIDリストを作成
+    const qaIds = [...new Set(responses.map(r => r.qaId))];
+    
+    // QAデータを一括取得（N+1問題の解消）
+    const qas = await Promise.all(qaIds.map(id => ctx.db.get(id)));
+    const qaMap = new Map(qas.filter(qa => qa !== null).map(qa => [qa!._id, qa!]));
+    
     // QA情報を取得して統計を計算
-    const responseStats = await Promise.all(
-      responses.map(async (response) => {
-        const qa = await ctx.db.get(response.qaId);
-        return {
-          responseId: response._id,
-          qaId: response.qaId,
-          question: qa?.question || "Unknown",
-          difficulty: qa?.difficulty || "unknown",
-          isCorrect: response.isCorrect,
-          timestamp: response.timestamp,
-        };
-      })
-    );
+    const responseStats = responses.map(response => {
+      const qa = qaMap.get(response.qaId);
+      return {
+        responseId: response._id,
+        qaId: response.qaId,
+        question: qa?.question || "Unknown",
+        difficulty: qa?.difficulty || "unknown",
+        isCorrect: response.isCorrect,
+        timestamp: response.timestamp,
+      };
+    });
 
     // 全体統計
     const totalResponses = responseStats.length;
@@ -150,6 +157,41 @@ export const statsByStudent = query({
       hard: responseStats.filter(r => r.difficulty === "hard"),
     };
 
+    // 講義別統計を計算
+    const lectureStats: Array<{
+      lectureId: string;
+      total: number;
+      correct: number;
+      accuracy: number;
+    }> = [];
+
+    // 講義ごとにグループ化
+    const lectureGroups = new Map<string, any[]>();
+    for (const response of responseStats) {
+      const qa = qaMap.get(response.qaId);
+      if (qa && qa.lectureId) {
+        const lectureId = qa.lectureId;
+        if (!lectureGroups.has(lectureId)) {
+          lectureGroups.set(lectureId, []);
+        }
+        lectureGroups.get(lectureId)!.push(response);
+      }
+    }
+
+    // 各講義の統計を計算
+    for (const [lectureId, responses] of lectureGroups) {
+      const total = responses.length;
+      const correct = responses.filter(r => r.isCorrect).length;
+      const accuracy = total > 0 ? (correct / total) * 100 : 0;
+      
+      lectureStats.push({
+        lectureId,
+        total,
+        correct,
+        accuracy: Math.round(accuracy * 100) / 100,
+      });
+    }
+
     return {
       studentId: args.studentId,
       overallStats: {
@@ -162,6 +204,7 @@ export const statsByStudent = query({
         medium: calculateResponseStats(difficultyBreakdown.medium),
         hard: calculateResponseStats(difficultyBreakdown.hard),
       },
+      lectureStats,
       recentResponses: responseStats
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, 10),
@@ -452,7 +495,7 @@ export const getCachedStats = query({
       };
     }
   },
-});
+}); 
 
 // 全講義の統合統計
 export const getAllLecturesStats = query({
@@ -498,7 +541,7 @@ export const getAllLecturesStats = query({
     };
     
     allQAs.forEach(qa => {
-      const difficulty = determineDifficulty(qa.question, qa.correctAnswer);
+      const difficulty = determineDifficulty(qa.question, qa.answer);
       difficultyCount[difficulty]++;
     });
     
@@ -575,4 +618,223 @@ function isAnswerCorrect(userAnswer: string, correctAnswer: string): boolean {
   return normalizedUser === normalizedCorrect || 
          normalizedCorrect.includes(normalizedUser) ||
          normalizedUser.includes(normalizedCorrect);
-} 
+}
+
+// キャッシュ用のテーブル定義が必要ですが、一時的にメモリキャッシュを実装
+const CACHE_DURATION = 5 * 60 * 1000; // 5分
+let analyticsCache: {
+  data: any;
+  timestamp: number;
+} | null = null;
+
+// 高速化されたキャッシュ付きクエリ
+export const getStudentsAnalyticsFast = query({
+  args: {},
+  handler: async (ctx): Promise<{
+    students: Array<{
+      _id: string;
+      name: string;
+      email: string;
+      totalResponses: number;
+      correctResponses: number;
+      accuracy: number;
+      lastActivity: number;
+      learningLevel: 'beginner' | 'intermediate' | 'advanced';
+      createdAt: number;
+    }>;
+    overallStats: {
+      totalStudents: number;
+      totalResponses: number;
+      overallAccuracy: number;
+      difficultyDistribution: {
+        easy: number;
+        medium: number;
+        hard: number;
+      };
+    };
+    cached: boolean;
+    computeTime: number;
+  }> => {
+    const startTime = Date.now();
+    
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || (user.role !== "teacher" && user.role !== "admin")) {
+      throw new ConvexError("Unauthorized: Only teachers and admins can view analytics");
+    }
+
+    // キャッシュチェック
+    const now = Date.now();
+    if (analyticsCache && (now - analyticsCache.timestamp) < CACHE_DURATION) {
+      return {
+        ...analyticsCache.data,
+        cached: true,
+        computeTime: Date.now() - startTime
+      };
+    }
+
+    // キャッシュが無効または期限切れの場合、新しく計算
+    const result = await computeStudentsAnalytics(ctx);
+    
+    // キャッシュを更新
+    analyticsCache = {
+      data: result,
+      timestamp: now
+    };
+
+    return {
+      ...result,
+      cached: false,
+      computeTime: Date.now() - startTime
+    };
+  },
+});
+
+// 統計計算のコア関数（共通化）
+async function computeStudentsAnalytics(ctx: any) {
+  // 並列でデータを取得（最適化）
+  const [allStudents, allResponses, allQAs] = await Promise.all([
+    ctx.db.query("students").collect(),
+    ctx.db.query("responses").collect(),
+    ctx.db.query("qa_templates").collect()
+  ]);
+
+  // QAマップを作成（難易度情報取得用）
+  const qaMap = new Map(allQAs.map(qa => [qa._id, qa]));
+
+  // 学生ごとの統計を効率的に計算
+  const studentStatsMap = new Map<string, {
+    totalResponses: number;
+    correctResponses: number;
+    lastActivity: number;
+    responses: any[];
+  }>();
+
+  // 全回答を学生ごとにグループ化
+  for (const response of allResponses) {
+    const studentKey = response.studentId;
+    if (!studentStatsMap.has(studentKey)) {
+      studentStatsMap.set(studentKey, {
+        totalResponses: 0,
+        correctResponses: 0,
+        lastActivity: 0,
+        responses: []
+      });
+    }
+    
+    const stats = studentStatsMap.get(studentKey)!;
+    stats.totalResponses++;
+    if (response.isCorrect) stats.correctResponses++;
+    stats.lastActivity = Math.max(stats.lastActivity, response.timestamp);
+    stats.responses.push(response);
+  }
+
+  // 学習レベルを判定する関数
+  const determineLearningLevel = (accuracy: number, totalResponses: number): 'beginner' | 'intermediate' | 'advanced' => {
+    if (totalResponses < 5) return 'beginner';
+    if (accuracy >= 80 && totalResponses >= 15) return 'advanced';
+    if (accuracy >= 60) return 'intermediate';
+    return 'beginner';
+  };
+
+  // 学生データを構築
+  const studentsWithStats = allStudents.map(student => {
+    const stats = studentStatsMap.get(student._id) || {
+      totalResponses: 0,
+      correctResponses: 0,
+      lastActivity: student.createdAt,
+      responses: []
+    };
+
+    const accuracy = stats.totalResponses > 0 ? (stats.correctResponses / stats.totalResponses) * 100 : 0;
+    
+    return {
+      _id: student._id,
+      name: student.name,
+      email: student.email.replace(/^(.{2}).*(@.*)$/, "$1***$2"),
+      totalResponses: stats.totalResponses,
+      correctResponses: stats.correctResponses,
+      accuracy: Math.round(accuracy * 100) / 100,
+      lastActivity: stats.lastActivity || student.createdAt,
+      learningLevel: determineLearningLevel(accuracy, stats.totalResponses),
+      createdAt: student.createdAt,
+    };
+  });
+
+  // 全体統計を計算
+  const totalStudents = allStudents.length;
+  const totalResponses = allResponses.length;
+  const totalCorrect = allResponses.filter(r => r.isCorrect).length;
+  const overallAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses) * 100 : 0;
+
+  // 難易度分布を計算
+  const difficultyDistribution = {
+    easy: 0,
+    medium: 0,
+    hard: 0
+  };
+
+  for (const response of allResponses) {
+    const qa = qaMap.get(response.qaId);
+    const difficulty = qa?.difficulty || 'medium';
+    if (difficulty in difficultyDistribution) {
+      difficultyDistribution[difficulty as keyof typeof difficultyDistribution]++;
+    }
+  }
+
+  return {
+    students: studentsWithStats,
+    overallStats: {
+      totalStudents,
+      totalResponses,
+      overallAccuracy: Math.round(overallAccuracy * 100) / 100,
+      difficultyDistribution,
+    }
+  };
+}
+
+// 学生分析ページ用の最適化されたクエリ（N+1問題解消）
+export const getStudentsAnalytics = query({
+  args: {},
+  handler: async (ctx): Promise<{
+    students: Array<{
+      _id: string;
+      name: string;
+      email: string;
+      totalResponses: number;
+      correctResponses: number;
+      accuracy: number;
+      lastActivity: number;
+      learningLevel: 'beginner' | 'intermediate' | 'advanced';
+      createdAt: number;
+    }>;
+    overallStats: {
+      totalStudents: number;
+      totalResponses: number;
+      overallAccuracy: number;
+      difficultyDistribution: {
+        easy: number;
+        medium: number;
+        hard: number;
+      };
+    };
+  }> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || (user.role !== "teacher" && user.role !== "admin")) {
+      throw new ConvexError("Unauthorized: Only teachers and admins can view analytics");
+    }
+
+    return await computeStudentsAnalytics(ctx);
+  },
+});
+
+ 
