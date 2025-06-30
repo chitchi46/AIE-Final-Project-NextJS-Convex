@@ -314,28 +314,28 @@ function LectureDetailContent() {
                   <div className="flex justify-between mb-1">
                     <span className="text-sm">易</span>
                     <span className="text-sm font-medium">
-                      {(stats.difficultyStats.easy.averageAccuracy * 100).toFixed(1)}%
+                      {stats.difficultyStats.easy.averageAccuracy.toFixed(1)}%
                     </span>
                   </div>
-                  <Progress value={stats.difficultyStats.easy.averageAccuracy * 100} />
+                  <Progress value={stats.difficultyStats.easy.averageAccuracy} />
                 </div>
                 <div>
                   <div className="flex justify-between mb-1">
                     <span className="text-sm">中</span>
                     <span className="text-sm font-medium">
-                      {(stats.difficultyStats.medium.averageAccuracy * 100).toFixed(1)}%
+                      {stats.difficultyStats.medium.averageAccuracy.toFixed(1)}%
                     </span>
                   </div>
-                  <Progress value={stats.difficultyStats.medium.averageAccuracy * 100} />
+                  <Progress value={stats.difficultyStats.medium.averageAccuracy} />
                 </div>
                 <div>
                   <div className="flex justify-between mb-1">
                     <span className="text-sm">難</span>
                     <span className="text-sm font-medium">
-                      {(stats.difficultyStats.hard.averageAccuracy * 100).toFixed(1)}%
+                      {stats.difficultyStats.hard.averageAccuracy.toFixed(1)}%
                     </span>
                   </div>
-                  <Progress value={stats.difficultyStats.hard.averageAccuracy * 100} />
+                  <Progress value={stats.difficultyStats.hard.averageAccuracy} />
                 </div>
               </CardContent>
             </Card>

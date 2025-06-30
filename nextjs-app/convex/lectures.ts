@@ -49,13 +49,13 @@ export const createLecture = mutation({
   },
 });
 
-// 講義一覧取得
+// 講義一覧取得（最適化版）
 export const listLectures = query({
   args: {
-    createdBy: v.optional(v.string()), // オプショナルにして、フィルタリングを選択可能にする
+    createdBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // createdByが指定されている場合はフィルタリング、そうでない場合は全件取得
+    // 講義を取得
     let lectures;
     if (args.createdBy) {
       lectures = await ctx.db
@@ -64,40 +64,56 @@ export const listLectures = query({
         .order("desc")
         .collect();
     } else {
-      // 全ての講義を取得（開発・デバッグ用）
       lectures = await ctx.db
         .query("lectures")
         .order("desc")
         .collect();
     }
 
-    // 各講義のQA数と回答数を取得
-    const lecturesWithStats = await Promise.all(
-      lectures.map(async (lecture) => {
-        const qas = await ctx.db
-          .query("qa_templates")
-          .withIndex("by_lecture", q => q.eq("lectureId", lecture._id))
-          .collect();
-        
-        const qaCount = qas.length;
-        
-        // 全QAの回答数を集計
-        let totalResponses = 0;
-        for (const qa of qas) {
-          const responses = await ctx.db
-            .query("responses")
-            .withIndex("by_qa", q => q.eq("qaId", qa._id))
-            .collect();
-          totalResponses += responses.length;
-        }
+    // 全てのQAと回答を一度に取得（N+1問題の解消）
+    const [allQas, allResponses] = await Promise.all([
+      ctx.db.query("qa_templates").collect(),
+      ctx.db.query("responses").collect(),
+    ]);
 
-        return {
-          ...lecture,
-          qaCount,
-          responseCount: totalResponses,
-        };
-      })
-    );
+    // QAを講義IDでグループ化
+    const qasByLecture = new Map<string, typeof allQas>();
+    for (const qa of allQas) {
+      const lectureId = qa.lectureId;
+      if (!qasByLecture.has(lectureId)) {
+        qasByLecture.set(lectureId, []);
+      }
+      qasByLecture.get(lectureId)!.push(qa);
+    }
+
+    // 回答をQA IDでグループ化
+    const responsesByQa = new Map<string, typeof allResponses>();
+    for (const response of allResponses) {
+      const qaId = response.qaId;
+      if (!responsesByQa.has(qaId)) {
+        responsesByQa.set(qaId, []);
+      }
+      responsesByQa.get(qaId)!.push(response);
+    }
+
+    // 各講義の統計を計算
+    const lecturesWithStats = lectures.map((lecture) => {
+      const lectureQas = qasByLecture.get(lecture._id) || [];
+      const qaCount = lectureQas.length;
+      
+      // 講義の全回答数を集計
+      let totalResponses = 0;
+      for (const qa of lectureQas) {
+        const qaResponses = responsesByQa.get(qa._id) || [];
+        totalResponses += qaResponses.length;
+      }
+
+      return {
+        ...lecture,
+        qaCount,
+        responseCount: totalResponses,
+      };
+    });
 
     return lecturesWithStats;
   },

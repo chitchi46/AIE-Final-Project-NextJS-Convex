@@ -35,12 +35,16 @@ export default function StudentDashboardPage() {
   const getOrCreateStudent = useMutation(api.students.getOrCreateStudent);
   const [studentId, setStudentId] = useState<Id<"students"> | null>(null);
 
-  // 認証されていない場合はログインページにリダイレクト
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push("/login");
-    }
-  }, [authLoading, isAuthenticated, router]);
+  // 認証されていない場合
+  if (!isAuthenticated || !user) {
+    // 本番環境では認証なしアクセスを禁止
+    router.push("/login");
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <LoadingSpinner size="lg" text="ログインページにリダイレクト中..." />
+      </div>
+    );
+  }
 
   // 学生IDを取得または作成
   useEffect(() => {
@@ -75,22 +79,6 @@ export default function StudentDashboardPage() {
         <LoadingSpinner size="lg" text="認証情報を確認中..." />
       </div>
     );
-  }
-
-  // 認証されていない場合
-  if (!isAuthenticated || !user) {
-    // テスト用: 作成済みのテストユーザーデータを使用
-    const testUser = {
-      _id: "jn72pqdf1j2vnjtg71bs55jrgd7jq30y",
-      id: "jn72pqdf1j2vnjtg71bs55jrgd7jq30y",
-      email: "test@example.com",
-      name: "テストユーザー",
-      role: "student" as const
-    };
-    
-    const testStudentId = "jh7b12sd540bm78we4czrjftc57jp2p2" as Id<"students">;
-    
-    return <DashboardContent user={testUser} studentId={testStudentId} logout={logout} />;
   }
 
   // データローディング中
