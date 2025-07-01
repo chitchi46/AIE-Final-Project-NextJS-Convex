@@ -8,7 +8,7 @@ import { AuthGuard } from "@/components/auth-guard";
 
 export default function TeacherDashboard() {
   return (
-    <AuthGuard allowedRoles={["teacher", "admin"]}>
+    <AuthGuard>
       <div className="container mx-auto py-8 space-y-6">
         <div className="flex justify-between items-center">
           <div>

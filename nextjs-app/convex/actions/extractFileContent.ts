@@ -153,7 +153,7 @@ ${contentForAnalysis}
 
         const response = completion.choices[0].message.content || "";
         const titleMatch = response.match(/タイトル:\s*(.+)/);
-        const descriptionMatch = response.match(/概要:\s*(.+)/s);
+        const descriptionMatch = response.match(/概要:\s*(.+)/gs);
         
         if (titleMatch) {
           suggestedTitle = titleMatch[1].trim();

@@ -36,7 +36,7 @@ export default function ImprovementsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // 講義一覧を取得
-  const lectures = useQuery(api.lectures.listLectures);
+  const lectures = useQuery(api.lectures.listLectures, {});
   
   // 選択された講義の改善提案を取得
   const suggestions = useQuery(

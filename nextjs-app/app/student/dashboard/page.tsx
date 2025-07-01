@@ -87,6 +87,7 @@ export default function StudentDashboardPage() {
     );
   }
 
+  if (!user) return null;
   return <DashboardContent user={user} studentId={studentId} logout={logout} />;
 }
 

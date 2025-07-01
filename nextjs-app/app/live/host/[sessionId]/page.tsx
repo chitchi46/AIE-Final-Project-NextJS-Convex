@@ -190,7 +190,7 @@ export default function LiveHostPage() {
                                       session.currentQuestion.options.map(option => ({
                                         name: option.substring(0, 10) + (option.length > 10 ? "..." : ""),
                                         count: currentAnswers.filter(a => a.answer === option).length,
-                                        isCorrect: option === session.currentQuestion.answer
+                                        isCorrect: session.currentQuestion ? option === session.currentQuestion.answer : false
                                       }))
                                     }>
                                       <CartesianGrid strokeDasharray="3 3" />
@@ -201,7 +201,7 @@ export default function LiveHostPage() {
                                         {session.currentQuestion.options.map((option, index) => (
                                           <Cell 
                                             key={`cell-${index}`} 
-                                            fill={option === session.currentQuestion.answer ? "#10b981" : "#6366f1"} 
+                                            fill={session.currentQuestion && option === session.currentQuestion.answer ? "#10b981" : "#6366f1"} 
                                           />
                                         ))}
                                       </Bar>
