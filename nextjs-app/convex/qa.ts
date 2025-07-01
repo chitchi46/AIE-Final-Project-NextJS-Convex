@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { ConvexError } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { api } from "./_generated/api";
 
 // 柔軟な採点関数
 function evaluateAnswer(correctAnswer: string, studentAnswer: string, questionType?: string): boolean {
@@ -470,9 +471,30 @@ export const updateQA = mutation({
       throw new Error("QA not found");
     }
 
+    // 更新前の値を保存
+    const previousValue = {
+      question: qa.question,
+      options: qa.options,
+      answer: qa.answer,
+      difficulty: qa.difficulty,
+      explanation: qa.explanation,
+    };
+
     await ctx.db.patch(args.qaId, {
       ...args.updates,
       updatedAt: Date.now(),
+    });
+
+    // 監査ログを記録
+    await ctx.runMutation(api.auditLogs.logAction, {
+      action: "update",
+      resourceType: "qa_template",
+      resourceId: args.qaId,
+      details: {
+        previousValue,
+        newValue: args.updates,
+        description: `QA「${qa.question.substring(0, 50)}...」を更新しました`,
+      },
     });
 
     return { success: true };
@@ -485,7 +507,25 @@ export const deleteQA = mutation({
     qaId: v.id("qa_templates"),
   },
   handler: async (ctx, args) => {
+    // 削除前にQA情報を取得
+    const qa = await ctx.db.get(args.qaId);
+    if (!qa) {
+      throw new Error("QA not found");
+    }
+
     await ctx.db.delete(args.qaId);
+
+    // 監査ログを記録
+    await ctx.runMutation(api.auditLogs.logAction, {
+      action: "delete",
+      resourceType: "qa_template",
+      resourceId: args.qaId,
+      details: {
+        previousValue: qa,
+        description: `QA「${qa.question.substring(0, 50)}...」を削除しました`,
+      },
+    });
+
     return { success: true };
   },
 });
@@ -507,6 +547,18 @@ export const togglePublish = mutation({
     await ctx.db.patch(args.qaId, {
       isPublished: !currentStatus,
       updatedAt: Date.now(),
+    });
+
+    // 監査ログを記録
+    await ctx.runMutation(api.auditLogs.logAction, {
+      action: currentStatus ? "unpublish" : "publish",
+      resourceType: "qa_template",
+      resourceId: args.qaId,
+      details: {
+        previousValue: { isPublished: currentStatus },
+        newValue: { isPublished: !currentStatus },
+        description: `QA「${qa.question.substring(0, 50)}...」を${!currentStatus ? '公開' : '非公開に'}しました`,
+      },
     });
 
     return { success: true, isPublished: !currentStatus };
@@ -537,6 +589,17 @@ export const createQA = mutation({
       isPublished: args.isPublished !== false, // 未指定の場合はtrue
       createdAt: Date.now(),
       updatedAt: Date.now(),
+    });
+
+    // 監査ログを記録
+    await ctx.runMutation(api.auditLogs.logAction, {
+      action: "create",
+      resourceType: "qa_template",
+      resourceId: qaId,
+      details: {
+        newValue: args,
+        description: `新しいQA「${args.question.substring(0, 50)}...」を作成しました`,
+      },
     });
 
     return { success: true, qaId };
@@ -581,5 +644,216 @@ export const getAllResponses = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("responses").collect();
+  },
+});
+
+// 記述問題の難易度を修正する管理者用mutation
+export const fixDescriptiveDifficulties = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || (user.role !== "teacher" && user.role !== "admin")) {
+      throw new ConvexError("Unauthorized: Only teachers and admins can fix difficulties");
+    }
+
+    // 記述問題で難易度が easy の問題を取得
+    const descriptiveQAs = await ctx.db
+      .query("qa_templates")
+      .filter((q) => 
+        q.and(
+          q.or(
+            q.eq(q.field("questionType"), "descriptive"),
+            q.eq(q.field("questionType"), "essay")
+          ),
+          q.eq(q.field("difficulty"), "easy")
+        )
+      )
+      .collect();
+
+    let fixedCount = 0;
+
+    for (const qa of descriptiveQAs) {
+      // 問題の内容に基づいて適切な難易度を判定
+      const question = qa.question;
+      const answer = qa.answer;
+      
+      let newDifficulty: "medium" | "hard" = "medium";
+      
+      // より詳細な説明を要求する問題は hard に設定
+      const hardKeywords = ['説明', '述べ', '論じ', '考察', '分析', '評価', '比較', '検討'];
+      const hasHardKeywords = hardKeywords.some(keyword => question.includes(keyword));
+      
+      if (hasHardKeywords || answer.length > 150 || question.length > 80) {
+        newDifficulty = "hard";
+      }
+
+      await ctx.db.patch(qa._id, {
+        difficulty: newDifficulty,
+        updatedAt: Date.now(),
+      });
+
+      fixedCount++;
+    }
+
+    return {
+      success: true,
+      fixedCount,
+      message: `${fixedCount}件の記述問題の難易度を修正しました`,
+    };
+  },
+});
+
+// VAE問題のquestionTypeを修正する管理者用mutation
+export const fixVAEQuestionTypes = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || (user.role !== "teacher" && user.role !== "admin")) {
+      throw new ConvexError("Unauthorized: Only teachers and admins can fix question types");
+    }
+
+    // VAEに関する問題を検索
+    const allQAs = await ctx.db.query("qa_templates").collect();
+    const vaeQAs = allQAs.filter(qa => 
+      qa.question.includes("VAE") || 
+      qa.question.includes("変分自己符号化器") ||
+      qa.answer.includes("ELBO") ||
+      qa.answer.includes("エビデンス下界")
+    );
+
+    let fixedCount = 0;
+
+    for (const qa of vaeQAs) {
+      // 現在multiple_choiceになっている記述式問題を修正
+      if (qa.questionType === "multiple_choice" && !qa.options) {
+        await ctx.db.patch(qa._id, {
+          questionType: "short_answer",
+          updatedAt: Date.now(),
+        });
+        fixedCount++;
+        console.log(`修正: ${qa.question} -> short_answer`);
+      }
+    }
+
+    return {
+      success: true,
+      fixedCount,
+      totalVAEQuestions: vaeQAs.length,
+      message: `${fixedCount}件のVAE問題のquestionTypeを修正しました`,
+    };
+  },
+});
+
+// 全ての問題のquestionTypeとoptionsの整合性を修正する管理者用mutation
+export const fixAllQuestionTypes = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || (user.role !== "teacher" && user.role !== "admin")) {
+      throw new ConvexError("Unauthorized: Only teachers and admins can fix question types");
+    }
+
+    const allQAs = await ctx.db.query("qa_templates").collect();
+    let fixedCount = 0;
+
+    for (const qa of allQAs) {
+      let needsUpdate = false;
+      const updates: any = {};
+
+      // short_answerまたはdescriptiveなのにoptionsが存在する場合
+      if ((qa.questionType === "short_answer" || qa.questionType === "descriptive") && qa.options) {
+        updates.options = undefined;
+        needsUpdate = true;
+        console.log(`修正: ${qa.question.substring(0, 50)}... -> optionsを削除`);
+      }
+
+      // multiple_choiceなのにoptionsが空または存在しない場合
+      if (qa.questionType === "multiple_choice" && (!qa.options || qa.options.length === 0)) {
+        // 適切なquestionTypeに変更
+        if (qa.answer.length > 100 || qa.question.includes("説明") || qa.question.includes("述べ")) {
+          updates.questionType = "descriptive";
+        } else {
+          updates.questionType = "short_answer";
+        }
+        updates.options = undefined;
+        needsUpdate = true;
+        console.log(`修正: ${qa.question.substring(0, 50)}... -> ${updates.questionType}に変更`);
+      }
+
+      if (needsUpdate) {
+        updates.updatedAt = Date.now();
+        await ctx.db.patch(qa._id, updates);
+        fixedCount++;
+      }
+    }
+
+    return {
+      success: true,
+      fixedCount,
+      totalQAs: allQAs.length,
+      message: `${fixedCount}件の問題の整合性を修正しました`,
+    };
+  },
+});
+
+// 内部用: optionsの整合性を修正（認証不要）
+export const fixQuestionTypesInternal = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allQAs = await ctx.db.query("qa_templates").collect();
+    let fixedCount = 0;
+
+    for (const qa of allQAs) {
+      let needsUpdate = false;
+      const updates: any = {};
+
+      // short_answerまたはdescriptiveなのにoptionsが存在する場合
+      if ((qa.questionType === "short_answer" || qa.questionType === "descriptive") && qa.options) {
+        updates.options = undefined;
+        needsUpdate = true;
+        console.log(`修正: ${qa.question.substring(0, 50)}... -> optionsを削除`);
+      }
+
+      // multiple_choiceなのにoptionsが空または存在しない場合  
+      if (qa.questionType === "multiple_choice" && (!qa.options || qa.options.length === 0)) {
+        // 適切なquestionTypeに変更
+        if (qa.answer.length > 100 || qa.question.includes("説明") || qa.question.includes("述べ")) {
+          updates.questionType = "descriptive";
+        } else {
+          updates.questionType = "short_answer";
+        }
+        updates.options = undefined;
+        needsUpdate = true;
+        console.log(`修正: ${qa.question.substring(0, 50)}... -> ${updates.questionType}に変更`);
+      }
+
+      if (needsUpdate) {
+        updates.updatedAt = Date.now();
+        await ctx.db.patch(qa._id, updates);
+        fixedCount++;
+      }
+    }
+
+    return {
+      success: true,
+      fixedCount,
+      totalQAs: allQAs.length,
+      message: `${fixedCount}件の問題の整合性を修正しました`,
+    };
   },
 }); 

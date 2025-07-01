@@ -114,11 +114,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check .env.example exists
+      - name: Check .env.example exists or create it
         run: |
           if [ ! -f "nextjs-app/.env.example" ]; then
-            echo "❌ .env.example file is missing!"
-            exit 1
+            echo "📝 Creating .env.example file..."
+            cat > nextjs-app/.env.example << 'EOF'
+          # JWT秘密鍵（32文字以上の安全な文字列を設定してください）
+          JWT_SECRET=your-secure-jwt-secret-key-at-least-32-characters-long
+
+          # Convex設定
+          NEXT_PUBLIC_CONVEX_URL=https://your-deployment-name.convex.cloud
+          CONVEX_DEPLOYMENT=your-deployment-name
+
+          # OpenAI API設定
+          OPENAI_API_KEY=sk-your-openai-api-key-here
+
+          # その他の設定（オプション）
+          NODE_ENV=development
+          EOF
           fi
           echo "✅ .env.example file exists"
 

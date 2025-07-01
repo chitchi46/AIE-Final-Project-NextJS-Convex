@@ -33,9 +33,9 @@ function LectureDetailContent() {
 
   const lectureId = params.id as Id<"lectures">;
 
-  const lecture = useQuery(api.lectures.getLecture, lectureId ? { lectureId } : undefined);
-  const qas = useQuery(api.qa.listQA, lectureId ? { lectureId, includeUnpublished: true } : undefined);
-  const stats = useQuery(api.stats.statsByLecture, lectureId ? { lectureId } : undefined);
+  const lecture = useQuery(api.lectures.getLecture, lectureId ? { lectureId } : "skip");
+  const qas = useQuery(api.qa.listQA, lectureId ? { lectureId, includeUnpublished: true } : "skip");
+  const stats = useQuery(api.stats.statsByLecture, lectureId ? { lectureId } : "skip");
   const deleteQA = useMutation(api.qa.deleteQA);
   const updateQA = useMutation(api.qa.updateQA);
   const togglePublish = useMutation(api.qa.togglePublish);

@@ -46,14 +46,14 @@ export function FileUploadWithExtraction({
     
     const files = Array.from(e.dataTransfer.files);
     handleFiles(files);
-  }, []);
+  }, [handleFiles]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     handleFiles(files);
   };
 
-  const handleFiles = async (files: File[]) => {
+  const handleFiles = useCallback(async (files: File[]) => {
     const validFiles = files.filter(file => {
       if (file.size > maxSize) {
         alert(`${file.name} is too large. Maximum size is ${maxSize / 1024 / 1024}MB`);
@@ -80,7 +80,7 @@ export function FileUploadWithExtraction({
         updateFileProgress(file.name, 20);
 
         let extractedText = '';
-        let metadata: { title?: string; description?: string } = {};
+        const metadata: { title?: string; description?: string } = {};
 
         if (file.type === 'application/pdf') {
           // PDFの場合、詳細な解析を行う
@@ -118,7 +118,7 @@ export function FileUploadWithExtraction({
         updateFileStatus(file.name, 'error', undefined, error instanceof Error ? error.message : '不明なエラー');
       }
     }
-  };
+  }, [maxSize, onExtractComplete]);
 
   const updateFileProgress = (fileName: string, progress: number) => {
     setProcessingFiles(prev => 

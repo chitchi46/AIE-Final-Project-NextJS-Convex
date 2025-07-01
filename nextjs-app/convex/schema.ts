@@ -144,4 +144,39 @@ export default defineSchema({
     attemptTime: v.number(),
     success: v.boolean(),
   }).index("by_email", ["email"]),
+
+  // 操作監査ログ
+  auditLogs: defineTable({
+    userId: v.string(), // 操作を行ったユーザーのID
+    userEmail: v.string(), // ユーザーのメールアドレス
+    action: v.union(
+      v.literal("create"),
+      v.literal("update"),
+      v.literal("delete"),
+      v.literal("publish"),
+      v.literal("unpublish"),
+      v.literal("bulk_action")
+    ),
+    resourceType: v.union(
+      v.literal("qa_template"),
+      v.literal("lecture"),
+      v.literal("student"),
+      v.literal("user"),
+      v.literal("improvement_suggestion")
+    ),
+    resourceId: v.optional(v.string()), // 対象リソースのID
+    details: v.optional(v.object({
+      previousValue: v.optional(v.any()),
+      newValue: v.optional(v.any()),
+      affectedCount: v.optional(v.number()), // 一括操作時の影響を受けた件数
+      description: v.optional(v.string()), // 操作の詳細説明
+    })),
+    timestamp: v.number(),
+    ipAddress: v.optional(v.string()), // IPアドレス（オプション）
+    userAgent: v.optional(v.string()), // ユーザーエージェント（オプション）
+  })
+    .index("by_user", ["userId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_resource", ["resourceType", "resourceId"])
+    .index("by_action", ["action"]),
 }); 

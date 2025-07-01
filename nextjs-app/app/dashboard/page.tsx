@@ -49,7 +49,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { Suspense } from "react";
 
 function DashboardContent() {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
   const [mounted, setMounted] = useState(false);
   const createSampleLecture = useMutation(api.lectures.createSampleLecture);
   
@@ -65,7 +65,10 @@ function DashboardContent() {
     setMounted(true);
   }, []);
 
-  const lectures = useQuery(api.lectures.listLectures);
+  const lectures = useQuery(
+    api.lectures.listLectures,
+    !authLoading && user ? {} : "skip"
+  );
 
   const handleCreateSampleData = async () => {
     if (!user) {

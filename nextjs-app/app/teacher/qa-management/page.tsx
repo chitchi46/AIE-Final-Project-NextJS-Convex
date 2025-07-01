@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash, Eye, EyeOff, Plus, BarChart, ArrowLeft } from "lucide-react";
+import { Pencil, Trash, Eye, EyeOff, Plus, BarChart, ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, FileText, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthGuard } from "@/components/auth-guard";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -38,6 +38,14 @@ export default function QAManagementPage() {
     explanation: "",
   });
 
+  // 検索・フィルタ・ページネーション用のstate
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterDifficulty, setFilterDifficulty] = useState<"all" | "easy" | "medium" | "hard">("all");
+  const [filterType, setFilterType] = useState<"all" | "multiple_choice" | "short_answer" | "descriptive">("all");
+  const [filterPublished, setFilterPublished] = useState<"all" | "published" | "unpublished">("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // 講義一覧を取得（認証状態を考慮）
   const lectures = useQuery(
     api.lectures.listLectures,
@@ -57,6 +65,52 @@ export default function QAManagementPage() {
     api.qa.getQAStatistics,
     selectedQAStats ? { qaId: selectedQAStats } : "skip"
   );
+
+  // フィルタリングされたQAリスト
+  const filteredQAList = useMemo(() => {
+    if (!qaList) return [];
+
+    let filtered = [...qaList];
+
+    // 検索フィルタ
+    if (searchQuery) {
+      filtered = filtered.filter(qa => 
+        qa.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        qa.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (qa.explanation && qa.explanation.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+
+    // 難易度フィルタ
+    if (filterDifficulty !== "all") {
+      filtered = filtered.filter(qa => qa.difficulty === filterDifficulty);
+    }
+
+    // 問題タイプフィルタ
+    if (filterType !== "all") {
+      filtered = filtered.filter(qa => qa.questionType === filterType);
+    }
+
+    // 公開状態フィルタ
+    if (filterPublished !== "all") {
+      const isPublished = filterPublished === "published";
+      filtered = filtered.filter(qa => (qa.isPublished !== false) === isPublished);
+    }
+
+    return filtered;
+  }, [qaList, searchQuery, filterDifficulty, filterType, filterPublished]);
+
+  // ページネーション
+  const totalPages = Math.ceil(filteredQAList.length / itemsPerPage);
+  const paginatedQAList = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredQAList.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredQAList, currentPage, itemsPerPage]);
+
+  // フィルタが変更されたらページを1に戻す
+  const resetPage = () => {
+    setCurrentPage(1);
+  };
 
   // Mutations
   const updateQA = useMutation(api.qa.updateQA);
@@ -231,8 +285,124 @@ export default function QAManagementPage() {
 
         {selectedLecture && (
           <>
-            {/* QA作成ボタン */}
-            <div className="mb-4 flex justify-end">
+            {/* 検索・フィルタセクション */}
+            <Card className="mb-6 p-4">
+              <div className="space-y-4">
+                {/* 検索バー */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="質問、回答、解説を検索..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      resetPage();
+                    }}
+                    className="pl-10"
+                  />
+                </div>
+
+                {/* フィルタ */}
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm font-medium">フィルタ:</span>
+                  </div>
+                  
+                  <Select 
+                    value={filterDifficulty} 
+                    onValueChange={(value: any) => {
+                      setFilterDifficulty(value);
+                      resetPage();
+                    }}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="難易度" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべての難易度</SelectItem>
+                      <SelectItem value="easy">易しい</SelectItem>
+                      <SelectItem value="medium">普通</SelectItem>
+                      <SelectItem value="hard">難しい</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select 
+                    value={filterType} 
+                    onValueChange={(value: any) => {
+                      setFilterType(value);
+                      resetPage();
+                    }}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="問題形式" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべての形式</SelectItem>
+                      <SelectItem value="multiple_choice">選択式</SelectItem>
+                      <SelectItem value="short_answer">短答式</SelectItem>
+                      <SelectItem value="descriptive">記述式</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select 
+                    value={filterPublished} 
+                    onValueChange={(value: any) => {
+                      setFilterPublished(value);
+                      resetPage();
+                    }}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="公開状態" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">すべて</SelectItem>
+                      <SelectItem value="published">公開中</SelectItem>
+                      <SelectItem value="unpublished">非公開</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setFilterDifficulty("all");
+                      setFilterType("all");
+                      setFilterPublished("all");
+                      resetPage();
+                    }}
+                  >
+                    フィルタをクリア
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            {/* QA作成ボタンと統計情報 */}
+            <div className="mb-4 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm text-gray-600">
+                    {filteredQAList.length}件のQA
+                    {qaList && filteredQAList.length !== qaList.length && 
+                      ` (全{qaList.length}件中)`
+                    }
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-gray-500" />
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => router.push('/teacher/audit-logs')}
+                    className="text-sm"
+                  >
+                    操作履歴を見る
+                  </Button>
+                </div>
+              </div>
               <Button onClick={() => setIsCreateDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 新規QA作成
@@ -241,13 +411,16 @@ export default function QAManagementPage() {
 
             {/* QA一覧 */}
             <div className="space-y-4">
-              {qaList && qaList.length === 0 && (
+              {filteredQAList.length === 0 && (
                 <Card className="p-6 text-center text-gray-500">
-                  まだQAが作成されていません。新規QA作成ボタンから作成してください。
+                  {qaList && qaList.length > 0 
+                    ? "検索条件に一致するQAが見つかりませんでした。"
+                    : "まだQAが作成されていません。新規QA作成ボタンから作成してください。"
+                  }
                 </Card>
               )}
               
-              {qaList?.map((qa) => (
+              {paginatedQAList.map((qa) => (
                 <Card key={qa._id} className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -332,6 +505,56 @@ export default function QAManagementPage() {
                 </Card>
               ))}
             </div>
+
+            {/* ページネーション */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(page => {
+                      // 現在のページの前後2ページ、最初と最後のページを表示
+                      return page === 1 || 
+                             page === totalPages || 
+                             Math.abs(page - currentPage) <= 2;
+                    })
+                    .map((page, index, array) => {
+                      // ページ番号の間に省略記号を表示
+                      const showEllipsis = index > 0 && page - array[index - 1] > 1;
+                      return (
+                        <div key={page} className="flex items-center gap-1">
+                          {showEllipsis && <span className="px-2">...</span>}
+                          <Button
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="icon"
+                            onClick={() => setCurrentPage(page)}
+                            className="w-10 h-10"
+                          >
+                            {page}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </>
         )}
 

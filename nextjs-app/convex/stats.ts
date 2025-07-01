@@ -223,10 +223,10 @@ function calculateDifficultyStats(stats: any[]) {
   
   return {
     count: total,
-    averageAccuracy: Math.round(averageAccuracy * 100) / 100, // 小数点2桁
+    averageAccuracy: Math.round(averageAccuracy * 100) / 100, // 小数点2桁にする（averageAccuracyは既に0-100のパーセンテージ）
     totalResponses,
     correctResponses: totalCorrect,
-    accuracy: Math.round(averageAccuracy * 100) / 100, // 互換性のため追加
+    accuracy: Math.round(averageAccuracy * 100) / 100, // 互換性のため追加（averageAccuracyは既に0-100のパーセンテージ）
   };
 }
 
@@ -541,7 +541,7 @@ export const getAllLecturesStats = query({
     };
     
     allQAs.forEach(qa => {
-      const difficulty = determineDifficulty(qa.question, qa.answer);
+      const difficulty = determineDifficulty(qa.question, qa.answer, qa.questionType);
       difficultyCount[difficulty]++;
     });
     
@@ -588,14 +588,38 @@ export const getAllLecturesStats = query({
 });
 
 // 難易度判定のヘルパー関数
-function determineDifficulty(question: string, correctAnswer: string): 'easy' | 'medium' | 'hard' {
+function determineDifficulty(
+  question: string, 
+  correctAnswer: string, 
+  questionType?: string
+): 'easy' | 'medium' | 'hard' {
   const questionLength = question.length;
   const answerLength = correctAnswer.length;
   
   // 複雑な単語や専門用語の検出
-  const complexWords = ['について', '詳しく', '具体的', '比較', '分析', '評価', '論述'];
+  const complexWords = ['について', '詳しく', '具体的', '比較', '分析', '評価', '論述', '説明', '述べ', '論じ', '考察'];
   const hasComplexWords = complexWords.some(word => question.includes(word));
   
+  // 記述問題は本質的により高い認知負荷を要求するため、最低でも medium とする
+  if (questionType === 'descriptive' || questionType === 'essay') {
+    if (hasComplexWords || answerLength > 150 || question.includes('説明') || question.includes('述べ') || question.includes('論じ')) {
+      return 'hard';
+    }
+    return 'medium'; // 記述問題の最低難易度は medium
+  }
+  
+  // 短答問題も選択問題より難易度を上げる
+  if (questionType === 'short_answer') {
+    if (questionLength < 30 && answerLength < 50 && !hasComplexWords) {
+      return 'easy';
+    } else if (questionLength < 80 && answerLength < 150) {
+      return 'medium';
+    } else {
+      return 'hard';
+    }
+  }
+  
+  // 選択問題（multiple_choice）の判定
   if (questionLength < 50 && answerLength < 100 && !hasComplexWords) {
     return 'easy';
   } else if (questionLength < 100 && answerLength < 200) {
@@ -704,7 +728,7 @@ async function computeStudentsAnalytics(ctx: any) {
   ]);
 
   // QAマップを作成（難易度情報取得用）
-  const qaMap = new Map(allQAs.map(qa => [qa._id, qa]));
+  const qaMap = new Map(allQAs.map((qa: any) => [qa._id, qa]));
 
   // 学生ごとの統計を効率的に計算
   const studentStatsMap = new Map<string, {
@@ -742,7 +766,7 @@ async function computeStudentsAnalytics(ctx: any) {
   };
 
   // 学生データを構築
-  const studentsWithStats = allStudents.map(student => {
+  const studentsWithStats = allStudents.map((student: any) => {
     const stats = studentStatsMap.get(student._id) || {
       totalResponses: 0,
       correctResponses: 0,
@@ -768,7 +792,7 @@ async function computeStudentsAnalytics(ctx: any) {
   // 全体統計を計算
   const totalStudents = allStudents.length;
   const totalResponses = allResponses.length;
-  const totalCorrect = allResponses.filter(r => r.isCorrect).length;
+  const totalCorrect = allResponses.filter((r: any) => r.isCorrect).length;
   const overallAccuracy = totalResponses > 0 ? (totalCorrect / totalResponses) * 100 : 0;
 
   // 難易度分布を計算
@@ -779,7 +803,7 @@ async function computeStudentsAnalytics(ctx: any) {
   };
 
   for (const response of allResponses) {
-    const qa = qaMap.get(response.qaId);
+    const qa: any = qaMap.get(response.qaId);
     const difficulty = qa?.difficulty || 'medium';
     if (difficulty in difficultyDistribution) {
       difficultyDistribution[difficulty as keyof typeof difficultyDistribution]++;

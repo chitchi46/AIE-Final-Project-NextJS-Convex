@@ -49,13 +49,16 @@ export function StudentLearningModal({
   });
 
   // パーソナライズ情報を取得（講義が指定されている場合）
-  const personalizedData = lectureId
-    ? useQuery(api.personalization.getPersonalizedQA, {
-        studentId,
-        lectureId,
-        requestedCount: 0, // 推奨情報のみ取得
-      })
-    : null;
+  const personalizedData = useQuery(
+    api.personalization.getPersonalizedQA,
+    lectureId
+      ? {
+          studentId,
+          lectureId,
+          requestedCount: 0, // 推奨情報のみ取得
+        }
+      : "skip"
+  );
 
   if (!student || !studentStats) {
     return (

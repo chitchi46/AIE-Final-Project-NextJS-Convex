@@ -19,6 +19,7 @@ import type * as actions_generateQA from "../actions/generateQA.js";
 import type * as actions_generateSuggestions from "../actions/generateSuggestions.js";
 import type * as actions_processFileAndGenerateQA from "../actions/processFileAndGenerateQA.js";
 import type * as analytics from "../analytics.js";
+import type * as auditLogs from "../auditLogs.js";
 import type * as auth from "../auth.js";
 import type * as authConfig from "../authConfig.js";
 import type * as files from "../files.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "actions/generateSuggestions": typeof actions_generateSuggestions;
   "actions/processFileAndGenerateQA": typeof actions_processFileAndGenerateQA;
   analytics: typeof analytics;
+  auditLogs: typeof auditLogs;
   auth: typeof auth;
   authConfig: typeof authConfig;
   files: typeof files;

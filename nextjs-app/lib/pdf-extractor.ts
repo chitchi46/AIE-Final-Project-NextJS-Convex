@@ -81,7 +81,7 @@ export async function extractTextFromPDF(file: File): Promise<ExtractedContent> 
     }
     
     // メタデータを取得
-    let metadata: ExtractedContent['metadata'] = {};
+    const metadata: ExtractedContent['metadata'] = {};
     try {
       const pdfMetadata = await pdf.getMetadata();
       if (pdfMetadata.info) {
