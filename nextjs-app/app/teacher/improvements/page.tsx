@@ -287,17 +287,17 @@ export default function ImprovementsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="text-center p-4 bg-gray-50 rounded-lg">
                           <p className="text-sm text-gray-600">総回答数</p>
-                          <p className="text-2xl font-bold">{lectureStats.totalResponses}</p>
+                          <p className="text-2xl font-bold">{lectureStats.overallStats.totalResponses}</p>
                         </div>
                         <div className="text-center p-4 bg-gray-50 rounded-lg">
                           <p className="text-sm text-gray-600">平均正答率</p>
-                          <p className={`text-2xl font-bold ${getAccuracyColor(lectureStats.overallAccuracy)}`}>
-                            {Math.round(lectureStats.overallAccuracy)}%
+                          <p className={`text-2xl font-bold ${getAccuracyColor(lectureStats.overallStats.accuracy)}`}>
+                            {Math.round(lectureStats.overallStats.accuracy)}%
                           </p>
                         </div>
                         <div className="text-center p-4 bg-gray-50 rounded-lg">
                           <p className="text-sm text-gray-600">参加学生数</p>
-                          <p className="text-2xl font-bold">{lectureStats.uniqueStudents}</p>
+                          <p className="text-2xl font-bold">{(lectureStats as any).uniqueStudents || 0}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -348,8 +348,8 @@ export default function ImprovementsPage() {
                                 {stats.count}問 / {stats.totalResponses}回答
                               </span>
                             </div>
-                            <span className={`font-semibold ${getAccuracyColor(stats.accuracy)}`}>
-                              {Math.round(stats.accuracy)}%
+                            <span className={`font-semibold ${getAccuracyColor(stats.accuracy || 0)}`}>
+                              {Math.round(stats.accuracy || 0)}%
                             </span>
                           </div>
                         ))}

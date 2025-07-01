@@ -188,7 +188,7 @@ export default function StudentAnalyticsPage() {
                         >
                           <Card 
                             className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                            onClick={() => handleStudentClick(student._id)}
+                            onClick={() => handleStudentClick(student._id as any)}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">

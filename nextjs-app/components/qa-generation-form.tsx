@@ -52,7 +52,7 @@ export function QAGenerationForm({ lectureId, lectureTitle, onGenerateComplete }
       if (lecture.files && lecture.files.length > 0) {
         for (const fileId of lecture.files) {
           try {
-            const fileContent = await extractFileContent({ fileId });
+            const fileContent = await extractFileContent({ fileId: fileId as any });
             if (fileContent) {
               content += fileContent + "\n\n";
             }

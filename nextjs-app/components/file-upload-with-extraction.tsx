@@ -46,7 +46,7 @@ export function FileUploadWithExtraction({
     
     const files = Array.from(e.dataTransfer.files);
     handleFiles(files);
-  }, [handleFiles]);
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);

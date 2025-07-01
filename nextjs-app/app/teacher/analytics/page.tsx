@@ -287,7 +287,7 @@ export default function TeacherAnalyticsPage() {
                         : 0;
                       
                       // より正確な平均スコア（実データがあれば使用）
-                      const avgScore = lectureDetail?.averageScore || 
+                      const avgScore = (lectureDetail as any)?.averageScore || 
                         (lecture.responseCount > 0 ? 
                           Math.min(70 + (lecture.responseCount * 3) + Math.random() * 20, 95) : 0);
                       

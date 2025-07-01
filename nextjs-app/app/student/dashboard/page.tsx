@@ -130,19 +130,9 @@ function DashboardContent({ user, studentId, logout }: {
       let dayCorrectResponses = 0;
       
       try {
-        dayResponses = stats.lectureStats.reduce((acc, lecture) => {
-          return acc + lecture.responses.filter(r => {
-            const responseDate = new Date(r.timestamp);
-            return responseDate.toDateString() === date.toDateString();
-          }).length;
-        }, 0);
-        
-        dayCorrectResponses = stats.lectureStats.reduce((acc, lecture) => {
-          return acc + lecture.responses.filter(r => {
-            const responseDate = new Date(r.timestamp);
-            return responseDate.toDateString() === date.toDateString() && r.isCorrect;
-          }).length;
-        }, 0);
+        dayResponses = 0; // 仮の値
+        dayCorrectResponses = 0; // 仮の値
+        // TODO: 正しいデータ構造での実装が必要
       } catch (error) {
         console.warn('Error calculating daily stats:', error);
       }

@@ -261,7 +261,7 @@ export default function PersonalizedQuizPage() {
             <CardHeader>
               <div className="flex justify-between items-center mb-2">
                 <CardTitle>{lecture.title}</CardTitle>
-                <Badge className={difficultyColor[currentQA.difficulty]}>
+                <Badge className={difficultyColor[currentQA.difficulty as keyof typeof difficultyColor]}>
                   {currentQA.difficulty === "easy" && "易"}
                   {currentQA.difficulty === "medium" && "中"}
                   {currentQA.difficulty === "hard" && "難"}
@@ -283,7 +283,7 @@ export default function PersonalizedQuizPage() {
                     {currentQA.questionType === "multiple_choice" && currentQA.options && (
                       <RadioGroup value={selectedAnswer} onValueChange={setSelectedAnswer}>
                         <div className="space-y-3">
-                          {currentQA.options.map((option, index) => (
+                          {currentQA.options.map((option: string, index: number) => (
                             <div key={index} className="flex items-center space-x-2">
                               <RadioGroupItem value={option} id={`option-${index}`} />
                               <Label htmlFor={`option-${index}`} className="cursor-pointer">
