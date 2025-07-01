@@ -122,4 +122,63 @@ export const getAllAuthAccounts = query({
   handler: async (ctx) => {
     return await ctx.db.query("authAccounts").collect();
   },
+});
+
+// 名前重複チェック関数
+export const checkNameAvailability = query({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    // by_nameインデックスを使用して効率的にチェック
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+    
+    return {
+      available: !existingUser,
+      message: existingUser ? "この名前は既に使用されています。別の名前をお選びください。" : null,
+    };
+  },
+});
+
+// カスタム登録関数（名前重複チェック付き）
+export const registerUser = mutation({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    password: v.string(),
+    role: v.union(v.literal("student"), v.literal("teacher"), v.literal("admin")),
+  },
+  handler: async (ctx, args) => {
+    // 名前重複チェック
+    const existingUserByName = await ctx.db
+      .query("users")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+    
+    if (existingUserByName) {
+      throw new ConvexError("この名前は既に使用されています。別の名前をお選びください。");
+    }
+
+    // メール重複チェック
+    const existingUserByEmail = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .first();
+    
+    if (existingUserByEmail) {
+      throw new ConvexError("このメールアドレスは既に使用されています。");
+    }
+
+    // 新規ユーザーを作成
+    const userId = await ctx.db.insert("users", {
+      email: args.email,
+      name: args.name,
+      role: args.role,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    return { userId, success: true };
+  },
 }); 

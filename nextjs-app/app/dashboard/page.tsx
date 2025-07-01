@@ -243,49 +243,54 @@ function DashboardContent() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-10"
           >
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2 gap-4">
               <div>
-                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-                  <BookOpen className="h-10 w-10 text-indigo-600" />
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
+                  <BookOpen className="h-8 w-8 lg:h-10 lg:w-10 text-indigo-600" />
                   講師ダッシュボード
                 </h1>
-                <p className="text-slate-600 mt-2 text-lg">
+                <p className="text-slate-600 mt-2 text-base lg:text-lg">
                   {user ? `${user.name}さん、こんにちは！` : "講義と学習状況を一元管理"}
                 </p>
               </div>
-              <div className="flex gap-3">
-                <Button size="lg" className="shadow-lg hover:shadow-xl transition-all">
+              <div className="flex flex-wrap gap-2 lg:gap-3 w-full lg:w-auto">
+                <Button size="default" className="shadow-lg hover:shadow-xl transition-all flex-1 sm:flex-initial">
                   <Link href="/lectures/new" className="flex items-center gap-2">
-                    <PlusCircle className="h-5 w-5" />
-                    新規講義作成
+                    <PlusCircle className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <span className="hidden sm:inline">新規講義作成</span>
+                    <span className="sm:hidden">新規</span>
                   </Link>
                 </Button>
-                <Button size="lg" variant="secondary" className="shadow-lg hover:shadow-xl transition-all">
+                <Button size="default" variant="secondary" className="shadow-lg hover:shadow-xl transition-all flex-1 sm:flex-initial">
                   <Link href="/teacher/qa-management" className="flex items-center gap-2">
-                    <ListChecks className="h-5 w-5" />
-                    QA管理
+                    <ListChecks className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <span className="hidden sm:inline">QA管理</span>
+                    <span className="sm:hidden">QA</span>
                   </Link>
                 </Button>
-                <Button size="lg" variant="secondary" className="shadow-lg hover:shadow-xl transition-all">
+                <Button size="default" variant="secondary" className="shadow-lg hover:shadow-xl transition-all flex-1 sm:flex-initial">
                   <Link href="/teacher/student-analytics" className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    学生分析
+                    <Users className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <span className="hidden sm:inline">学生分析</span>
+                    <span className="sm:hidden">分析</span>
                   </Link>
                 </Button>
-                <Button size="lg" variant="secondary" className="shadow-lg hover:shadow-xl transition-all">
+                <Button size="default" variant="secondary" className="shadow-lg hover:shadow-xl transition-all flex-1 sm:flex-initial">
                   <Link href="/teacher/improvements" className="flex items-center gap-2">
-                    <Lightbulb className="h-5 w-5" />
-                    改善提案
+                    <Lightbulb className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <span className="hidden sm:inline">改善提案</span>
+                    <span className="sm:hidden">改善</span>
                   </Link>
                 </Button>
-                <Button size="lg" variant="secondary" className="shadow-lg hover:shadow-xl transition-all">
+                <Button size="default" variant="secondary" className="shadow-lg hover:shadow-xl transition-all flex-1 sm:flex-initial">
                   <Link href="/live/new" className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5" />
-                    ライブクイズ
+                    <Sparkles className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <span className="hidden sm:inline">ライブクイズ</span>
+                    <span className="sm:hidden">ライブ</span>
                   </Link>
                 </Button>
-                <Button size="lg" variant="outline" onClick={logout}>
-                  <LogOut className="h-5 w-5" />
+                <Button size="default" variant="outline" onClick={logout} className="flex-initial">
+                  <LogOut className="h-4 w-4 lg:h-5 lg:w-5" />
                 </Button>
               </div>
             </div>
@@ -480,7 +485,7 @@ function LectureCard({ lecture, index }: { lecture: any; index: number }) {
             </div>
           </div>
           <div className="space-y-2">
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button asChild variant="outline" size="sm" className="flex-1">
                 <Link href={`/lecture/${lecture._id}`}>
                   詳細を見る

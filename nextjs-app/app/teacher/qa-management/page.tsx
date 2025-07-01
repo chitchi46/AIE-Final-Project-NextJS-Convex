@@ -18,6 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { AuthGuard } from "@/components/auth-guard";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { useAuth } from "@/hooks/useAuth";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { showUndoToast } from "@/components/ui/undo-toast";
 
 export default function QAManagementPage() {
   const router = useRouter();
@@ -29,6 +31,8 @@ export default function QAManagementPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedQAStats, setSelectedQAStats] = useState<Id<"qa_templates"> | null>(null);
   const [isStatsDialogOpen, setIsStatsDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [qaToDelete, setQaToDelete] = useState<{ id: Id<"qa_templates">; question: string } | null>(null);
   const [newQA, setNewQA] = useState({
     question: "",
     questionType: "multiple_choice" as "multiple_choice" | "short_answer" | "descriptive",
@@ -149,22 +153,42 @@ export default function QAManagementPage() {
     }
   };
 
-  const handleDeleteQA = async (qaId: Id<"qa_templates">) => {
-    if (!confirm("このQAを削除してもよろしいですか？")) return;
+  const handleDeleteQA = async () => {
+    if (!qaToDelete) return;
     
     try {
-      await deleteQA({ qaId });
-      toast({
-        title: "削除成功",
-        description: "QAが削除されました。",
+      await deleteQA({ qaId: qaToDelete.id });
+      
+      // 削除確認ダイアログを閉じる
+      setDeleteConfirmOpen(false);
+      setQaToDelete(null);
+      
+      // UNDOトーストを表示
+      showUndoToast({
+        title: "QAを削除しました",
+        description: `「${qaToDelete.question.substring(0, 30)}...」を削除しました`,
+        onUndo: async () => {
+          // 実際の復元処理はサーバー側での実装が必要
+          toast({
+            title: "復元機能は準備中です",
+            description: "削除したデータの復元機能は今後実装予定です。",
+            variant: "destructive",
+          });
+        },
       });
     } catch (error) {
+      console.error("Delete error:", error);
       toast({
         title: "削除失敗",
         description: "QAの削除に失敗しました。",
         variant: "destructive",
       });
     }
+  };
+
+  const handleDeleteClick = (qa: any) => {
+    setQaToDelete({ id: qa._id, question: qa.question });
+    setDeleteConfirmOpen(true);
   };
 
   const handleTogglePublish = async (qaId: Id<"qa_templates">) => {
@@ -303,85 +327,88 @@ export default function QAManagementPage() {
                 </div>
 
                 {/* フィルタ */}
-                <div className="flex flex-wrap gap-4">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
                     <Filter className="h-4 w-4 text-gray-500" />
                     <span className="text-sm font-medium">フィルタ:</span>
                   </div>
                   
-                  <Select 
-                    value={filterDifficulty} 
-                    onValueChange={(value: any) => {
-                      setFilterDifficulty(value);
-                      resetPage();
-                    }}
-                  >
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="難易度" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">すべての難易度</SelectItem>
-                      <SelectItem value="easy">易しい</SelectItem>
-                      <SelectItem value="medium">普通</SelectItem>
-                      <SelectItem value="hard">難しい</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <Select 
+                      value={filterDifficulty} 
+                      onValueChange={(value: any) => {
+                        setFilterDifficulty(value);
+                        resetPage();
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="難易度" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">すべての難易度</SelectItem>
+                        <SelectItem value="easy">易しい</SelectItem>
+                        <SelectItem value="medium">普通</SelectItem>
+                        <SelectItem value="hard">難しい</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                  <Select 
-                    value={filterType} 
-                    onValueChange={(value: any) => {
-                      setFilterType(value);
-                      resetPage();
-                    }}
-                  >
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="問題形式" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">すべての形式</SelectItem>
-                      <SelectItem value="multiple_choice">選択式</SelectItem>
-                      <SelectItem value="short_answer">短答式</SelectItem>
-                      <SelectItem value="descriptive">記述式</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <Select 
+                      value={filterType} 
+                      onValueChange={(value: any) => {
+                        setFilterType(value);
+                        resetPage();
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="問題形式" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">すべての形式</SelectItem>
+                        <SelectItem value="multiple_choice">選択式</SelectItem>
+                        <SelectItem value="short_answer">短答式</SelectItem>
+                        <SelectItem value="descriptive">記述式</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                  <Select 
-                    value={filterPublished} 
-                    onValueChange={(value: any) => {
-                      setFilterPublished(value);
-                      resetPage();
-                    }}
-                  >
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="公開状態" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">すべて</SelectItem>
-                      <SelectItem value="published">公開中</SelectItem>
-                      <SelectItem value="unpublished">非公開</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <Select 
+                      value={filterPublished} 
+                      onValueChange={(value: any) => {
+                        setFilterPublished(value);
+                        resetPage();
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="公開状態" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">すべて</SelectItem>
+                        <SelectItem value="published">公開中</SelectItem>
+                        <SelectItem value="unpublished">非公開</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setFilterDifficulty("all");
-                      setFilterType("all");
-                      setFilterPublished("all");
-                      resetPage();
-                    }}
-                  >
-                    フィルタをクリア
-                  </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setFilterDifficulty("all");
+                        setFilterType("all");
+                        setFilterPublished("all");
+                        resetPage();
+                      }}
+                      className="w-full sm:w-auto"
+                    >
+                      フィルタをクリア
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card>
 
             {/* QA作成ボタンと統計情報 */}
-            <div className="mb-4 flex justify-between items-center">
-              <div className="flex items-center gap-4">
+            <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-gray-500" />
                   <span className="text-sm text-gray-600">
@@ -397,13 +424,16 @@ export default function QAManagementPage() {
                     variant="link"
                     size="sm"
                     onClick={() => router.push('/teacher/audit-logs')}
-                    className="text-sm"
+                    className="text-sm p-0"
                   >
                     操作履歴を見る
                   </Button>
                 </div>
               </div>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Button 
+                onClick={() => setIsCreateDialogOpen(true)}
+                className="w-full sm:w-auto"
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 新規QA作成
               </Button>
@@ -422,9 +452,9 @@ export default function QAManagementPage() {
               
               {paginatedQAList.map((qa) => (
                 <Card key={qa._id} className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
+                    <div className="flex-1 w-full">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
                         <Badge className={getDifficultyColor(qa.difficulty)}>
                           {qa.difficulty}
                         </Badge>
@@ -438,7 +468,7 @@ export default function QAManagementPage() {
                           </Badge>
                         )}
                       </div>
-                      <h3 className="text-lg font-semibold mb-2">{qa.question}</h3>
+                      <h3 className="text-base sm:text-lg font-semibold mb-2 break-words">{qa.question}</h3>
                       {qa.options && (
                         <div className="mb-2">
                           <p className="text-sm text-gray-600 mb-1">選択肢:</p>
@@ -460,14 +490,15 @@ export default function QAManagementPage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-2 ml-4">
+                    <div className="flex flex-wrap gap-1 ml-0 sm:ml-4 mt-3 sm:mt-0">
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => handleViewStats(qa._id)}
                         title="統計を表示"
+                        className="h-8 w-8 sm:h-10 sm:w-10"
                       >
-                        <BarChart className="h-4 w-4" />
+                        <BarChart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -477,28 +508,31 @@ export default function QAManagementPage() {
                           setIsEditDialogOpen(true);
                         }}
                         title="編集"
+                        className="h-8 w-8 sm:h-10 sm:w-10"
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => handleTogglePublish(qa._id)}
                         title={qa.isPublished !== false ? "非公開にする" : "公開する"}
+                        className="h-8 w-8 sm:h-10 sm:w-10"
                       >
                         {qa.isPublished !== false ? (
-                          <Eye className="h-4 w-4" />
+                          <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         ) : (
-                          <EyeOff className="h-4 w-4" />
+                          <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         )}
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDeleteQA(qa._id)}
+                        onClick={() => handleDeleteClick(qa)}
                         title="削除"
+                        className="h-8 w-8 sm:h-10 sm:w-10"
                       >
-                        <Trash className="h-4 w-4" />
+                        <Trash className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </Button>
                     </div>
                   </div>
@@ -801,6 +835,18 @@ export default function QAManagementPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* 削除確認ダイアログ */}
+        <ConfirmationDialog
+          open={deleteConfirmOpen}
+          onOpenChange={setDeleteConfirmOpen}
+          title="QAを削除しますか？"
+          description={qaToDelete ? `「${qaToDelete.question.substring(0, 50)}...」を削除します。この操作は取り消せません。` : ""}
+          variant="destructive"
+          confirmText="削除する"
+          cancelText="キャンセル"
+          onConfirm={handleDeleteQA}
+        />
       </div>
     </AuthGuard>
   );

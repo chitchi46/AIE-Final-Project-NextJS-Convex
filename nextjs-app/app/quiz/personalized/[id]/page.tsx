@@ -334,15 +334,22 @@ export default function PersonalizedQuizPage() {
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <div>
-                          <h4 className="font-medium text-sm text-gray-600">正解:</h4>
-                          <p className="mt-1">{currentQA.answer}</p>
+                      <div className="space-y-3">
+                        {/* 自分の回答を表示 */}
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                          <h4 className="font-medium text-sm text-blue-700 mb-1">あなたの回答:</h4>
+                          <p className="text-sm">{currentQA.questionType === "multiple_choice" ? selectedAnswer : textAnswer}</p>
                         </div>
+                        
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                          <h4 className="font-medium text-sm text-green-700 mb-1">正解:</h4>
+                          <p className="text-sm">{currentQA.answer}</p>
+                        </div>
+                        
                         {currentQA.explanation && (
-                          <div>
-                            <h4 className="font-medium text-sm text-gray-600">解説:</h4>
-                            <p className="mt-1 text-sm">{currentQA.explanation}</p>
+                          <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                            <h4 className="font-medium text-sm text-gray-700 mb-1">解説:</h4>
+                            <p className="text-sm">{currentQA.explanation}</p>
                           </div>
                         )}
                       </div>

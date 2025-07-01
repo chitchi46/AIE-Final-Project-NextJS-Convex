@@ -15,25 +15,4 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       },
     }),
   ],
-  callbacks: {
-    async createOrUpdateUser(ctx, args) {
-      // 既存のユーザーがいる場合はそのIDを返す
-      if (args.existingUserId) {
-        return args.existingUserId;
-      }
-      
-      // プロファイルから必要な情報を取得
-      const { email, name, role } = args.profile;
-      
-      // 新規ユーザーを作成
-      const userId = await ctx.db.insert("users", {
-        email: email as string,
-        name: name as string,
-        role: (role as "student" | "teacher" | "admin") || "student",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-      return userId;
-    },
-  },
 }); 

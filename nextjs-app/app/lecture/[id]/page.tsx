@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { QAGenerationForm } from "@/components/qa-generation-form";
 import { useAction } from "convex/react";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { showUndoToast } from "@/components/ui/undo-toast";
 
 function LectureDetailContent() {
   const params = useParams();
@@ -47,6 +49,8 @@ function LectureDetailContent() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [qaToDelete, setQaToDelete] = useState<{ id: Id<"qa_templates">; question: string } | null>(null);
   const [newQA, setNewQA] = useState({
     question: "",
     questionType: "multiple_choice" as const,
@@ -71,11 +75,33 @@ function LectureDetailContent() {
     );
   }
 
-  const handleDeleteQA = async (qaId: Id<"qa_templates">) => {
-    if (confirm("このQ&Aを削除してもよろしいですか？")) {
-      await deleteQA({ qaId });
-      toast.success("Q&Aを削除しました");
+  const handleDeleteQA = async () => {
+    if (!qaToDelete) return;
+
+    try {
+      await deleteQA({ qaId: qaToDelete.id });
+      
+      // 削除確認ダイアログを閉じる
+      setDeleteConfirmOpen(false);
+      setQaToDelete(null);
+      
+      // UNDOトーストを表示
+      showUndoToast({
+        title: "Q&Aを削除しました",
+        description: `「${qaToDelete.question.substring(0, 30)}...」を削除しました`,
+        onUndo: async () => {
+          toast.error("復元機能は準備中です");
+        },
+      });
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error("Q&Aの削除に失敗しました");
     }
+  };
+
+  const handleDeleteClick = (qa: any) => {
+    setQaToDelete({ id: qa._id, question: qa.question });
+    setDeleteConfirmOpen(true);
   };
 
   const handleTogglePublish = async (qaId: Id<"qa_templates">) => {
@@ -286,7 +312,7 @@ function LectureDetailContent() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDeleteQA(qa._id)}
+                              onClick={() => handleDeleteClick(qa)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -583,6 +609,18 @@ function LectureDetailContent() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* 削除確認ダイアログ */}
+      <ConfirmationDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Q&Aを削除しますか？"
+        description={qaToDelete ? `「${qaToDelete.question.substring(0, 50)}...」を削除します。この操作は取り消せません。` : ""}
+        variant="destructive"
+        confirmText="削除する"
+        cancelText="キャンセル"
+        onConfirm={handleDeleteQA}
+      />
     </div>
   );
 }

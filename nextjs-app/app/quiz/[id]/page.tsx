@@ -286,17 +286,26 @@ export default function QuizPage() {
                       )}
                     </div>
                     
+                    {/* 自分の回答を表示 */}
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-xs sm:text-sm text-blue-700">
+                        <span className="font-medium">あなたの回答:</span> {currentQA.questionType === "multiple_choice" ? selectedAnswer : textAnswer}
+                      </p>
+                    </div>
+                    
                     {!lastResult.isCorrect && (
-                      <div className="mt-2">
-                        <p className="text-xs sm:text-sm text-gray-700">
+                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                        <p className="text-xs sm:text-sm text-green-700">
                           <span className="font-medium">正解:</span> {lastResult.correctAnswer}
                         </p>
                       </div>
                     )}
 
                     {lastResult.explanation && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <p className="text-xs sm:text-sm text-gray-700">{lastResult.explanation}</p>
+                      <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+                        <p className="text-xs sm:text-sm text-gray-700">
+                          <span className="font-medium">解説:</span> {lastResult.explanation}
+                        </p>
                       </div>
                     )}
                   </div>

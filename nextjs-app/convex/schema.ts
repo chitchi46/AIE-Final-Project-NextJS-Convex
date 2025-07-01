@@ -75,7 +75,8 @@ export default defineSchema({
     role: v.union(v.literal("teacher"), v.literal("student"), v.literal("admin")),
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
-  }).index("by_email", ["email"]),
+  }).index("by_email", ["email"])
+    .index("by_name", ["name"]),
 
   // ファイル情報
   files: defineTable({

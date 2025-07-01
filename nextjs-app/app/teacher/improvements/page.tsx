@@ -14,6 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { AuthGuard } from "@/components/auth-guard";
 import { LoadingSpinner } from "@/components/loading-spinner";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { showUndoToast } from "@/components/ui/undo-toast";
 import { 
   Lightbulb, 
   TrendingUp, 
@@ -34,6 +36,8 @@ export default function ImprovementsPage() {
   const { toast } = useToast();
   const [selectedLecture, setSelectedLecture] = useState<Id<"lectures"> | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [suggestionToDelete, setSuggestionToDelete] = useState<{ id: Id<"improvement_suggestions">; content: string } | null>(null);
 
   // 講義一覧を取得
   const lectures = useQuery(api.lectures.listLectures, {});
@@ -84,22 +88,41 @@ export default function ImprovementsPage() {
     }
   };
 
-  const handleDeleteSuggestion = async (suggestionId: Id<"improvement_suggestions">) => {
-    if (!confirm("この改善提案を削除してもよろしいですか？")) return;
+  const handleDeleteSuggestion = async () => {
+    if (!suggestionToDelete) return;
 
     try {
-      await deleteSuggestion({ suggestionId });
-      toast({
-        title: "削除成功",
-        description: "改善提案を削除しました。",
+      await deleteSuggestion({ suggestionId: suggestionToDelete.id });
+      
+      // 削除確認ダイアログを閉じる
+      setDeleteConfirmOpen(false);
+      setSuggestionToDelete(null);
+      
+      // UNDOトーストを表示
+      showUndoToast({
+        title: "改善提案を削除しました",
+        description: `改善提案を削除しました`,
+        onUndo: async () => {
+          toast({
+            title: "復元機能は準備中です",
+            description: "削除したデータの復元機能は今後実装予定です。",
+            variant: "destructive",
+          });
+        },
       });
     } catch (error) {
+      console.error("Delete error:", error);
       toast({
         title: "削除失敗",
         description: "改善提案の削除に失敗しました。",
         variant: "destructive",
       });
     }
+  };
+
+  const handleDeleteClick = (suggestion: any) => {
+    setSuggestionToDelete({ id: suggestion._id, content: suggestion.content });
+    setDeleteConfirmOpen(true);
   };
 
   const getAccuracyColor = (accuracy: number) => {
@@ -233,7 +256,7 @@ export default function ImprovementsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDeleteSuggestion(suggestion._id)}
+                            onClick={() => handleDeleteClick(suggestion)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -361,6 +384,18 @@ export default function ImprovementsPage() {
             </TabsContent>
           </Tabs>
         )}
+
+        {/* 削除確認ダイアログ */}
+        <ConfirmationDialog
+          open={deleteConfirmOpen}
+          onOpenChange={setDeleteConfirmOpen}
+          title="改善提案を削除しますか？"
+          description={suggestionToDelete ? `この改善提案を削除します。この操作は取り消せません。` : ""}
+          variant="destructive"
+          confirmText="削除する"
+          cancelText="キャンセル"
+          onConfirm={handleDeleteSuggestion}
+        />
       </div>
     </AuthGuard>
   );

@@ -454,8 +454,8 @@ def _simple_answer_check(correct_answer: str, student_answer: str) -> bool:
     common_keywords = correct_keywords.intersection(student_keywords)
     similarity = len(common_keywords) / len(correct_keywords)
     
-    # 50%以上のキーワードが一致すれば正解とする
-    return similarity >= 0.5
+    # 30%以上のキーワードが一致すれば正解とする（50%から緩和）
+    return similarity >= 0.3
 
 @app.get("/lectures/{lecture_id}/stats", response_model=StatsResponse)
 async def get_lecture_stats(lecture_id: int, db: Session = Depends(get_db)):

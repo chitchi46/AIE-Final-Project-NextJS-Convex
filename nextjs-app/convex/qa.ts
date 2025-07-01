@@ -30,39 +30,30 @@ function evaluateAnswer(correctAnswer: string, studentAnswer: string, questionTy
     return false;
   }
 
-  // 記述式の場合の柔軟な判定
-  if (questionType === "descriptive" || questionType === "short_answer") {
-    // 部分一致（正解に学生の回答が含まれている、または学生の回答に正解が含まれている）
-    if (normalizedCorrect.includes(normalizedStudent) || normalizedStudent.includes(normalizedCorrect)) {
-      return true;
-    }
-
-    // キーワードベースの判定
-    const correctKeywords = normalizedCorrect.split(/[、。\s]+/).filter(word => word.length > 1);
-    const studentKeywords = normalizedStudent.split(/[、。\s]+/).filter(word => word.length > 1);
-    
-    // 重要なキーワードの一致率を計算
-    const matchingKeywords = correctKeywords.filter(keyword => 
-      studentKeywords.some(studentKeyword => 
-        keyword.includes(studentKeyword) || studentKeyword.includes(keyword)
-      )
-    );
-    
-    const matchRate = matchingKeywords.length / correctKeywords.length;
-    
-    // 50%以上のキーワードが一致していれば正解とする
-    if (matchRate >= 0.5) {
-      return true;
-    }
-
-    // Levenshtein距離による類似度判定
-    const similarity = calculateSimilarity(normalizedCorrect, normalizedStudent);
-    
-    // 70%以上の類似度があれば正解とする
-    return similarity >= 0.7;
+  // 記述式の場合のキーワードベース評価（適度な厳しさ）
+  const correctWords = normalizedCorrect.split(/\s+/).filter(word => word.length > 1);
+  const studentWords = normalizedStudent.split(/\s+/).filter(word => word.length > 1);
+  
+  if (correctWords.length === 0) {
+    return studentWords.length === 0;
   }
 
-  return false;
+  // キーワード一致率チェック（65%以上必要）
+  const matchingWords = correctWords.filter(word => 
+    studentWords.some(studentWord => 
+      studentWord.includes(word) || word.includes(studentWord)
+    )
+  );
+  
+  const keywordMatchRate = matchingWords.length / correctWords.length;
+  
+  if (keywordMatchRate >= 0.65) {
+    return true;
+  }
+
+  // Levenshtein距離による類似度チェック（75%以上必要）
+  const similarity = calculateSimilarity(normalizedCorrect, normalizedStudent);
+  return similarity >= 0.75;
 }
 
 // Levenshtein距離による類似度計算
