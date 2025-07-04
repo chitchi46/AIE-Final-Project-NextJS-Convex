@@ -21,7 +21,8 @@ import { Id } from "@/convex/_generated/dataModel";
 import { motion } from "framer-motion";
 import { AuthGuard } from "@/components/auth-guard";
 import { useAuth } from "@/hooks/useAuth";
-import { FileUploadWithExtraction } from "@/components/file-upload-with-extraction";
+import nextDynamic from "next/dynamic";
+const FileUploadWithExtraction = nextDynamic(() => import("@/components/file-upload-with-extraction").then(m => m.FileUploadWithExtraction), { ssr: false });
 
 function NewLectureContent() {
   const router = useRouter();
