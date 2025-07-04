@@ -27,6 +27,7 @@ import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { chartColors, accessibleColors } from "@/lib/constants/colors";
 
 export default function PersonalizedResultsPage() {
   const params = useParams();
@@ -123,11 +124,11 @@ export default function PersonalizedResultsPage() {
   };
 
   const getPerformanceMessage = (accuracy: number) => {
-    if (accuracy >= 90) return { text: "素晴らしい成績です！", color: "text-green-600" };
-    if (accuracy >= 80) return { text: "とても良い成績です！", color: "text-green-600" };
+    if (accuracy >= 90) return { text: "素晴らしい成績です！", color: "text-cyan-600" };
+    if (accuracy >= 80) return { text: "とても良い成績です！", color: "text-cyan-600" };
     if (accuracy >= 70) return { text: "良い成績です！", color: "text-blue-600" };
-    if (accuracy >= 60) return { text: "まずまずの成績です", color: "text-yellow-600" };
-    return { text: "もう少し頑張りましょう", color: "text-red-600" };
+    if (accuracy >= 60) return { text: "まずまずの成績です", color: "text-orange-600" };
+    return { text: "もう少し頑張りましょう", color: "text-purple-600" };
   };
 
   const performanceMessage = getPerformanceMessage(accuracy);

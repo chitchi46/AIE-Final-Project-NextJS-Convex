@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { toast as sonnerToast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Undo2 } from "lucide-react";
 
@@ -23,30 +24,21 @@ export function showUndoToast({
   let timeoutId: NodeJS.Timeout;
   let isUndone = false;
 
-  const { dismiss } = toast({
-    title,
+  const toastId = sonnerToast(title, {
     description,
     duration,
-    action: (
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-2"
-        onClick={async () => {
-          isUndone = true;
-          clearTimeout(timeoutId);
-          dismiss();
-          await onUndo();
-          toast({
-            title: "取り消しました",
-            description: "操作を取り消しました",
-          });
-        }}
-      >
-        <Undo2 className="h-4 w-4" />
-        取り消す
-      </Button>
-    ),
+    action: {
+      label: "取り消す",
+      onClick: async () => {
+        isUndone = true;
+        clearTimeout(timeoutId);
+        sonnerToast.dismiss(toastId);
+        await onUndo();
+        sonnerToast.success("取り消しました", {
+          description: "操作を取り消しました",
+        });
+      },
+    },
   });
 
   // 時間経過後に実際の処理を実行
@@ -59,7 +51,7 @@ export function showUndoToast({
   return {
     dismiss: () => {
       clearTimeout(timeoutId);
-      dismiss();
+      sonnerToast.dismiss(toastId);
     },
   };
 }

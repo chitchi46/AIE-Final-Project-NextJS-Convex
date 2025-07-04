@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/heading-has-content */
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -32,6 +33,7 @@ const Alert = React.forwardRef<
 ))
 Alert.displayName = "Alert"
 
+// eslint-disable-next-line jsx-a11y/heading-has-content
 const AlertTitle = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLHeadingElement>

@@ -3,6 +3,8 @@ import { Inter, Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "./convex-client-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { SkipToContent } from "@/components/skip-to-content";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -26,14 +28,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
+    <html lang="ja" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${notoSansJP.variable} font-sans antialiased bg-slate-50`}
+        className={`${inter.variable} ${notoSansJP.variable} font-sans antialiased`}
       >
-        <ConvexClientProvider>
-        {children}
-          <Toaster />
-        </ConvexClientProvider>
+        <SkipToContent />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ConvexClientProvider>
+            {children}
+            <Toaster />
+          </ConvexClientProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

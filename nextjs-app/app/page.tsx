@@ -9,7 +9,7 @@ const HomeContent = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <LoadingSpinner size="lg" text="読み込み中..." />
       </div>
     ),

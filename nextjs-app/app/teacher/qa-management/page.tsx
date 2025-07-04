@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -13,13 +13,17 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash, Eye, EyeOff, Plus, BarChart, ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, FileText, Activity } from "lucide-react";
+import { Pencil, Trash, Eye, EyeOff, Plus, BarChart, ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, FileText, Activity, AlertCircle, CheckCircle2, CheckSquare, Square } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthGuard } from "@/components/auth-guard";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { useAuth } from "@/hooks/useAuth";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { showUndoToast } from "@/components/ui/undo-toast";
+import { qaFormSchema, validateField, getFieldError, type QAFormData } from "@/lib/validations/qa";
+import { z } from "zod";
+import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function QAManagementPage() {
   const router = useRouter();
@@ -33,14 +37,28 @@ export default function QAManagementPage() {
   const [isStatsDialogOpen, setIsStatsDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [qaToDelete, setQaToDelete] = useState<{ id: Id<"qa_templates">; question: string } | null>(null);
-  const [newQA, setNewQA] = useState({
+  
+  // 一括操作用のstate
+  const [selectedQAs, setSelectedQAs] = useState<Set<Id<"qa_templates">>>(new Set());
+  const [isBulkActionConfirmOpen, setIsBulkActionConfirmOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<"publish" | "unpublish" | "delete" | null>(null);
+  const [newQA, setNewQA] = useState<Partial<QAFormData>>({
     question: "",
     questionType: "multiple_choice" as "multiple_choice" | "short_answer" | "descriptive",
     options: ["", "", "", ""],
     answer: "",
-    difficulty: "medium" as "easy" | "medium" | "hard",
+    difficulty: "easy" as "easy" | "medium" | "hard",
     explanation: "",
   });
+  
+  const [isAIGenerateDialogOpen, setIsAIGenerateDialogOpen] = useState(false);
+  const [aiGeneratePrompt, setAiGeneratePrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  // バリデーション関連のstate
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+  const [isValidating, setIsValidating] = useState(false);
 
   // 検索・フィルタ・ページネーション用のstate
   const [searchQuery, setSearchQuery] = useState("");
@@ -115,12 +133,97 @@ export default function QAManagementPage() {
   const resetPage = () => {
     setCurrentPage(1);
   };
+  
+  // フィールドのバリデーション
+  const validateFormField = useCallback((fieldName: keyof QAFormData, value: any) => {
+    const error = validateField(fieldName, value, newQA);
+    setFieldErrors(prev => {
+      if (error) {
+        return { ...prev, [fieldName]: error };
+      } else {
+        const { [fieldName]: removed, ...rest } = prev;
+        return rest;
+      }
+    });
+    return !error;
+  }, [newQA]);
+  
+  // フォーム全体のバリデーション
+  const validateForm = useCallback(() => {
+    try {
+      let schemaToUse;
+      switch (newQA.questionType) {
+        case 'multiple_choice':
+          schemaToUse = qaFormSchema.parse({ ...newQA, options: newQA.options?.filter(o => o) });
+          break;
+        case 'short_answer':
+          schemaToUse = qaFormSchema.parse({ ...newQA, options: [] });
+          break;
+        case 'descriptive':
+          schemaToUse = qaFormSchema.parse({ ...newQA, options: [] });
+          break;
+      }
+      setFieldErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach(err => {
+          const path = err.path.join('.');
+          errors[path] = err.message;
+        });
+        setFieldErrors(errors);
+      }
+      return false;
+    }
+  }, [newQA]);
+  
+  // 難易度と問題タイプの連携
+  const handleDifficultyChange = useCallback((difficulty: "easy" | "medium" | "hard") => {
+    const questionTypeMap = {
+      easy: "multiple_choice" as const,
+      medium: "short_answer" as const,
+      hard: "descriptive" as const
+    };
+    
+    setNewQA(prev => ({
+      ...prev,
+      difficulty,
+      questionType: questionTypeMap[difficulty],
+      // 問題タイプが変わった場合は選択肢をリセット
+      options: questionTypeMap[difficulty] === "multiple_choice" ? ["", "", "", ""] : []
+    }));
+  }, []);
+
+  // フィールド変更ハンドラー
+  const handleFieldChange = useCallback((fieldName: keyof QAFormData, value: any) => {
+    setNewQA(prev => ({ ...prev, [fieldName]: value }));
+    
+    // タッチされたフィールドをマーク
+    if (!touchedFields[fieldName]) {
+      setTouchedFields(prev => ({ ...prev, [fieldName]: true }));
+    }
+    
+    // デバウンスされたバリデーション
+    setTimeout(() => {
+      validateFormField(fieldName, value);
+    }, 300);
+  }, [touchedFields, validateFormField]);
+  
+  // フィールドのブラー時にバリデーション
+  const handleFieldBlur = useCallback((fieldName: keyof QAFormData) => {
+    setTouchedFields(prev => ({ ...prev, [fieldName]: true }));
+    validateFormField(fieldName, (newQA as any)[fieldName]);
+  }, [newQA, validateFormField]);
 
   // Mutations
   const updateQA = useMutation(api.qa.updateQA);
   const deleteQA = useMutation(api.qa.deleteQA);
   const togglePublish = useMutation(api.qa.togglePublish);
   const createQA = useMutation(api.qa.createQA);
+  const generateQAWithAI = useMutation(api.qa.generateQAWithAI);
+  const bulkTogglePublish = useMutation(api.qa.bulkTogglePublish);
+  const bulkDeleteQA = useMutation(api.qa.bulkDeleteQA);
 
   const handleUpdateQA = async () => {
     if (!editingQA) return;
@@ -210,15 +313,29 @@ export default function QAManagementPage() {
   const handleCreateQA = async () => {
     if (!selectedLecture) return;
     
+    // バリデーション実行
+    setIsValidating(true);
+    const isValid = validateForm();
+    setIsValidating(false);
+    
+    if (!isValid) {
+      toast({
+        title: "入力エラー",
+        description: "入力内容に誤りがあります。エラーメッセージを確認してください。",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       await createQA({
         lectureId: selectedLecture,
-        question: newQA.question,
-        questionType: newQA.questionType,
-        options: newQA.questionType === "multiple_choice" ? newQA.options.filter(o => o) : undefined,
-        answer: newQA.answer,
-        difficulty: newQA.difficulty,
-        explanation: newQA.explanation,
+        question: newQA.question!,
+        questionType: newQA.questionType!,
+        options: newQA.questionType === "multiple_choice" ? newQA.options?.filter(o => o) : undefined,
+        answer: newQA.answer!,
+        difficulty: newQA.difficulty!,
+        explanation: newQA.explanation || "",
       });
       
       toast({
@@ -235,6 +352,8 @@ export default function QAManagementPage() {
         difficulty: "medium",
         explanation: "",
       });
+      setFieldErrors({});
+      setTouchedFields({});
     } catch (error) {
       toast({
         title: "作成失敗",
@@ -266,6 +385,133 @@ export default function QAManagementPage() {
     setSelectedQAStats(qaId);
     setIsStatsDialogOpen(true);
   };
+
+  const handleAIGenerate = async () => {
+    if (!aiGeneratePrompt.trim() || !selectedLecture) {
+      toast({
+        title: "エラー",
+        description: "生成指示を入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const result = await generateQAWithAI({
+        lectureId: selectedLecture,
+        prompt: aiGeneratePrompt,
+      });
+
+      if (result.success) {
+        toast({
+          title: "成功",
+          description: `${result.qaList.length}件のQAを生成しました`,
+        });
+        setIsAIGenerateDialogOpen(false);
+        setAiGeneratePrompt("");
+      } else {
+        throw new Error(result.error || "AI生成に失敗しました");
+      }
+    } catch (error) {
+      console.error("AI生成エラー:", error);
+      toast({
+        title: "エラー",
+        description: error instanceof Error ? error.message : "AI生成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // 一括操作のハンドラー
+  const handleSelectAll = useCallback(() => {
+    if (selectedQAs.size === paginatedQAList.length) {
+      setSelectedQAs(new Set());
+    } else {
+      setSelectedQAs(new Set(paginatedQAList.map(qa => qa._id)));
+    }
+  }, [selectedQAs, paginatedQAList]);
+
+  const handleSelectQA = useCallback((qaId: Id<"qa_templates">) => {
+    const newSelected = new Set(selectedQAs);
+    if (newSelected.has(qaId)) {
+      newSelected.delete(qaId);
+    } else {
+      newSelected.add(qaId);
+    }
+    setSelectedQAs(newSelected);
+  }, [selectedQAs]);
+
+  const handleBulkAction = useCallback((action: "publish" | "unpublish" | "delete") => {
+    if (selectedQAs.size === 0) {
+      toast({
+        title: "エラー",
+        description: "QAを選択してください",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBulkAction(action);
+    setIsBulkActionConfirmOpen(true);
+  }, [selectedQAs, toast]);
+
+  const executeBulkAction = async () => {
+    if (!bulkAction || selectedQAs.size === 0) return;
+
+    try {
+      if (bulkAction === "delete") {
+        const result = await bulkDeleteQA({
+          qaIds: Array.from(selectedQAs),
+        });
+
+        if (result.success) {
+          showUndoToast({
+            title: "QAを削除しました",
+            description: `${result.summary.succeeded}件のQAを削除しました`,
+            onUndo: async () => {
+              toast({
+                title: "復元機能は準備中です",
+                description: "削除したデータの復元機能は今後実装予定です。",
+                variant: "destructive",
+              });
+            },
+          });
+        }
+      } else {
+        const isPublished = bulkAction === "publish";
+        const result = await bulkTogglePublish({
+          qaIds: Array.from(selectedQAs),
+          isPublished,
+        });
+
+        if (result.success) {
+          toast({
+            title: "成功",
+            description: result.message,
+          });
+        }
+      }
+
+      // 選択をクリア
+      setSelectedQAs(new Set());
+      setIsBulkActionConfirmOpen(false);
+      setBulkAction(null);
+    } catch (error) {
+      console.error("一括操作エラー:", error);
+      toast({
+        title: "エラー",
+        description: "一括操作に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // フィルタ変更時に選択をクリア
+  useEffect(() => {
+    setSelectedQAs(new Set());
+  }, [searchQuery, filterDifficulty, filterType, filterPublished, currentPage]);
 
   return (
     <AuthGuard requiredRole="teacher">
@@ -430,14 +676,83 @@ export default function QAManagementPage() {
                   </Button>
                 </div>
               </div>
-              <Button 
-                onClick={() => setIsCreateDialogOpen(true)}
-                className="w-full sm:w-auto"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                新規QA作成
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                {selectedQAs.size > 0 && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleBulkAction("publish")}
+                      className="text-green-600"
+                    >
+                      <Eye className="mr-1 h-4 w-4" />
+                      一括公開 ({selectedQAs.size}件)
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleBulkAction("unpublish")}
+                      className="text-orange-600"
+                    >
+                      <EyeOff className="mr-1 h-4 w-4" />
+                      一括非公開 ({selectedQAs.size}件)
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleBulkAction("delete")}
+                      className="text-red-600"
+                    >
+                      <Trash className="mr-1 h-4 w-4" />
+                      一括削除 ({selectedQAs.size}件)
+                    </Button>
+                  </div>
+                )}
+                <Button 
+                  onClick={() => setIsAIGenerateDialogOpen(true)}
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  <Activity className="mr-2 h-4 w-4" />
+                  AI自動生成
+                </Button>
+                <Button 
+                  onClick={() => setIsCreateDialogOpen(true)}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  手動作成
+                </Button>
+              </div>
             </div>
+
+            {/* 一括選択バー */}
+            {paginatedQAList.length > 0 && (
+              <Card className="mb-4 p-2">
+                <div className="flex items-center gap-4">
+                  <Checkbox
+                    checked={selectedQAs.size === paginatedQAList.length && paginatedQAList.length > 0}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="すべて選択"
+                  />
+                  <span className="text-sm text-gray-600">
+                    {selectedQAs.size === 0 
+                      ? "このページのQAをすべて選択" 
+                      : `${selectedQAs.size}件選択中`}
+                  </span>
+                  {selectedQAs.size > 0 && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setSelectedQAs(new Set())}
+                      className="text-sm p-0 text-gray-500"
+                    >
+                      選択をクリア
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            )}
 
             {/* QA一覧 */}
             <div className="space-y-4">
@@ -452,88 +767,109 @@ export default function QAManagementPage() {
               
               {paginatedQAList.map((qa) => (
                 <Card key={qa._id} className="p-4">
-                  <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
-                    <div className="flex-1 w-full">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <Badge className={getDifficultyColor(qa.difficulty)}>
-                          {qa.difficulty}
-                        </Badge>
-                        <Badge variant="outline">
-                          {getQuestionTypeLabel(qa.questionType)}
-                        </Badge>
-                        {qa.isPublished === false && (
-                          <Badge variant="secondary">
-                            <EyeOff className="mr-1 h-3 w-3" />
-                            非公開
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={selectedQAs.has(qa._id)}
+                      onCheckedChange={() => handleSelectQA(qa._id)}
+                      aria-label={`${qa.question}を選択`}
+                      className="mt-1"
+                    />
+                    <div className="flex flex-col sm:flex-row items-start justify-between gap-3 flex-1">
+                      <div className="flex-1 w-full">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <Badge className={getDifficultyColor(qa.difficulty)}>
+                            {qa.difficulty}
                           </Badge>
+                          <Badge variant="outline">
+                            {getQuestionTypeLabel(qa.questionType)}
+                          </Badge>
+                          {qa.isPublished === false && (
+                            <Badge variant="secondary">
+                              <EyeOff className="mr-1 h-3 w-3" />
+                              非公開
+                            </Badge>
+                          )}
+                        </div>
+                        <h3 className="text-base sm:text-lg font-semibold mb-2 break-words">{qa.question}</h3>
+                        {qa.options && (
+                          <div className="mb-2">
+                            <p className="text-sm text-gray-600 mb-1">選択肢:</p>
+                            <ul className="list-disc list-inside text-sm">
+                              {qa.options.map((option, index) => (
+                                <li key={index} className={option === qa.answer ? "font-semibold text-green-600" : ""}>
+                                  {option}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <p className="text-sm text-gray-600">
+                          <span className="font-semibold">正解:</span> {qa.answer}
+                        </p>
+                        {qa.explanation && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            <span className="font-semibold">解説:</span> {qa.explanation}
+                          </p>
                         )}
                       </div>
-                      <h3 className="text-base sm:text-lg font-semibold mb-2 break-words">{qa.question}</h3>
-                      {qa.options && (
-                        <div className="mb-2">
-                          <p className="text-sm text-gray-600 mb-1">選択肢:</p>
-                          <ul className="list-disc list-inside text-sm">
-                            {qa.options.map((option, index) => (
-                              <li key={index} className={option === qa.answer ? "font-semibold text-green-600" : ""}>
-                                {option}
-                              </li>
-                            ))}
-                          </ul>
+                      <div className="flex flex-col sm:flex-row gap-2 ml-0 sm:ml-4 mt-3 sm:mt-0 min-w-fit">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewStats(qa._id)}
+                            title="統計を表示"
+                            className="h-8 px-2"
+                          >
+                            <BarChart className="h-3.5 w-3.5 mr-1" />
+                            <span className="text-xs hidden sm:inline">統計</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingQA(qa);
+                              setIsEditDialogOpen(true);
+                            }}
+                            title="編集"
+                            className="h-8 px-2"
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" />
+                            <span className="text-xs hidden sm:inline">編集</span>
+                          </Button>
                         </div>
-                      )}
-                      <p className="text-sm text-gray-600">
-                        <span className="font-semibold">正解:</span> {qa.answer}
-                      </p>
-                      {qa.explanation && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          <span className="font-semibold">解説:</span> {qa.explanation}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1 ml-0 sm:ml-4 mt-3 sm:mt-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleViewStats(qa._id)}
-                        title="統計を表示"
-                        className="h-8 w-8 sm:h-10 sm:w-10"
-                      >
-                        <BarChart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setEditingQA(qa);
-                          setIsEditDialogOpen(true);
-                        }}
-                        title="編集"
-                        className="h-8 w-8 sm:h-10 sm:w-10"
-                      >
-                        <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleTogglePublish(qa._id)}
-                        title={qa.isPublished !== false ? "非公開にする" : "公開する"}
-                        className="h-8 w-8 sm:h-10 sm:w-10"
-                      >
-                        {qa.isPublished !== false ? (
-                          <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        ) : (
-                          <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteClick(qa)}
-                        title="削除"
-                        className="h-8 w-8 sm:h-10 sm:w-10"
-                      >
-                        <Trash className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleTogglePublish(qa._id)}
+                            title={qa.isPublished !== false ? "非公開にする" : "公開する"}
+                            className="h-8 px-2"
+                          >
+                            {qa.isPublished !== false ? (
+                              <>
+                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                <span className="text-xs hidden sm:inline">公開中</span>
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="h-3.5 w-3.5 mr-1" />
+                                <span className="text-xs hidden sm:inline">非公開</span>
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteClick(qa)}
+                            title="削除"
+                            className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash className="h-3.5 w-3.5 mr-1" />
+                            <span className="text-xs hidden sm:inline">削除</span>
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -711,61 +1047,112 @@ export default function QAManagementPage() {
               </div>
               
               <div>
-                <Label htmlFor="new-question">質問</Label>
+                <Label htmlFor="new-question" className="flex items-center gap-2">
+                  質問
+                  {touchedFields.question && !fieldErrors.question && newQA.question && (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  )}
+                </Label>
                 <Textarea
                   id="new-question"
                   value={newQA.question}
-                  onChange={(e) => setNewQA({ ...newQA, question: e.target.value })}
-                  className="mt-1"
+                  onChange={(e) => handleFieldChange('question', e.target.value)}
+                  onBlur={() => handleFieldBlur('question')}
+                  className={cn(
+                    "mt-1",
+                    touchedFields.question && fieldErrors.question && "border-red-500"
+                  )}
+                  aria-invalid={touchedFields.question && !!fieldErrors.question}
+                  aria-describedby={fieldErrors.question ? "question-error" : undefined}
                 />
+                {touchedFields.question && fieldErrors.question && (
+                  <p id="question-error" className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {fieldErrors.question}
+                  </p>
+                )}
               </div>
               
               {newQA.questionType === "multiple_choice" && (
                 <div>
-                  <Label>選択肢</Label>
-                  {newQA.options.map((option, index) => (
+                  <Label className="flex items-center gap-2">
+                    選択肢
+                    {touchedFields.options && !fieldErrors.options && ((newQA.options?.filter(o => o).length ?? 0) >= 2) && (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    )}
+                  </Label>
+                  {newQA.options?.map((option, index) => (
                     <Input
                       key={index}
                       value={option}
                       onChange={(e) => {
-                        const newOptions = [...newQA.options];
+                        const newOptions = [...(newQA.options || [])];
                         newOptions[index] = e.target.value;
-                        setNewQA({ ...newQA, options: newOptions });
+                        handleFieldChange('options', newOptions);
                       }}
-                      className="mt-1"
+                      onBlur={() => handleFieldBlur('options')}
+                      className={cn(
+                        "mt-1",
+                        touchedFields.options && fieldErrors.options && "border-red-500"
+                      )}
                       placeholder={`選択肢 ${index + 1}`}
+                      aria-describedby={fieldErrors.options ? "options-error" : undefined}
                     />
                   ))}
+                  {touchedFields.options && fieldErrors.options && (
+                    <p id="options-error" className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.options}
+                    </p>
+                  )}
                 </div>
               )}
               
               <div>
-                <Label htmlFor="new-answer">正解</Label>
+                <Label htmlFor="new-answer" className="flex items-center gap-2">
+                  正解
+                  {touchedFields.answer && !fieldErrors.answer && newQA.answer && (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  )}
+                </Label>
                 <Input
                   id="new-answer"
                   value={newQA.answer}
-                  onChange={(e) => setNewQA({ ...newQA, answer: e.target.value })}
-                  className="mt-1"
+                  onChange={(e) => handleFieldChange('answer', e.target.value)}
+                  onBlur={() => handleFieldBlur('answer')}
+                  className={cn(
+                    "mt-1",
+                    touchedFields.answer && fieldErrors.answer && "border-red-500"
+                  )}
+                  aria-invalid={touchedFields.answer && !!fieldErrors.answer}
+                  aria-describedby={fieldErrors.answer ? "answer-error" : undefined}
                 />
+                {touchedFields.answer && fieldErrors.answer && (
+                  <p id="answer-error" className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {fieldErrors.answer}
+                  </p>
+                )}
               </div>
               
               <div>
                 <Label htmlFor="new-difficulty">難易度</Label>
                 <Select
                   value={newQA.difficulty}
-                  onValueChange={(value: "easy" | "medium" | "hard") => 
-                    setNewQA({ ...newQA, difficulty: value })
-                  }
+                  onValueChange={handleDifficultyChange}
                 >
                   <SelectTrigger id="new-difficulty" className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="easy">易しい</SelectItem>
-                    <SelectItem value="medium">普通</SelectItem>
-                    <SelectItem value="hard">難しい</SelectItem>
+                    <SelectItem value="easy">易 (選択式)</SelectItem>
+                    <SelectItem value="medium">中 (短答式)</SelectItem>
+                    <SelectItem value="hard">難 (記述式)</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  難易度に応じて問題形式が自動設定されます
+                </p>
               </div>
               
               <div>
@@ -836,6 +1223,64 @@ export default function QAManagementPage() {
           </DialogContent>
         </Dialog>
 
+        {/* AI自動生成ダイアログ */}
+        <Dialog open={isAIGenerateDialogOpen} onOpenChange={setIsAIGenerateDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>AI Q&A自動生成</DialogTitle>
+              <DialogDescription>
+                講義内容に基づいてAIがQ&Aを自動生成します
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="ai-prompt">生成指示</Label>
+                <Textarea
+                  id="ai-prompt"
+                  value={aiGeneratePrompt}
+                  onChange={(e) => setAiGeneratePrompt(e.target.value)}
+                  placeholder="どのような問題を生成したいか指示してください。例：「基本概念について易しい選択式問題を5問」「応用問題を3問」など"
+                  className="mt-1 min-h-[100px]"
+                />
+              </div>
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">生成のヒント</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• 問題数を指定すると、その数だけ生成されます</li>
+                  <li>• 難易度（易・中・難）を指定できます</li>
+                  <li>• 特定のトピックや概念を指定できます</li>
+                  <li>• 問題形式は難易度に応じて自動選択されます</li>
+                </ul>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsAIGenerateDialogOpen(false)}
+                disabled={isGenerating}
+              >
+                キャンセル
+              </Button>
+              <Button 
+                onClick={handleAIGenerate}
+                disabled={isGenerating || !aiGeneratePrompt.trim()}
+              >
+                {isGenerating ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Activity className="mr-2 h-4 w-4" />
+                    生成する
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* 削除確認ダイアログ */}
         <ConfirmationDialog
           open={deleteConfirmOpen}
@@ -846,6 +1291,36 @@ export default function QAManagementPage() {
           confirmText="削除する"
           cancelText="キャンセル"
           onConfirm={handleDeleteQA}
+        />
+
+        {/* 一括操作確認ダイアログ */}
+        <ConfirmationDialog
+          open={isBulkActionConfirmOpen}
+          onOpenChange={setIsBulkActionConfirmOpen}
+          title={
+            bulkAction === "delete" 
+              ? `${selectedQAs.size}件のQAを削除しますか？`
+              : bulkAction === "publish"
+              ? `${selectedQAs.size}件のQAを公開しますか？`
+              : `${selectedQAs.size}件のQAを非公開にしますか？`
+          }
+          description={
+            bulkAction === "delete"
+              ? "選択したQAがすべて削除されます。この操作は取り消せません。"
+              : bulkAction === "publish"
+              ? "選択したQAがすべて公開され、学生が回答できるようになります。"
+              : "選択したQAがすべて非公開となり、学生には表示されなくなります。"
+          }
+          variant={bulkAction === "delete" ? "destructive" : "default"}
+          confirmText={
+            bulkAction === "delete" 
+              ? "削除する"
+              : bulkAction === "publish"
+              ? "公開する"
+              : "非公開にする"
+          }
+          cancelText="キャンセル"
+          onConfirm={executeBulkAction}
         />
       </div>
     </AuthGuard>

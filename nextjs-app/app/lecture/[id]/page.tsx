@@ -44,6 +44,7 @@ function LectureDetailContent() {
   const createQA = useMutation(api.qa.createQA);
   const generateQAWithAI = useAction(api.actions.generateQA.generateQAWithAI);
   const extractFileContent = useAction(api.actions.extractFileContent.extractFileContent);
+  const updateLecture = useMutation(api.lectures.updateLecture);
 
   const [editingQA, setEditingQA] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -51,6 +52,8 @@ function LectureDetailContent() {
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [qaToDelete, setQaToDelete] = useState<{ id: Id<"qa_templates">; question: string } | null>(null);
+  const [isLectureEditDialogOpen, setIsLectureEditDialogOpen] = useState(false);
+  const [editingLecture, setEditingLecture] = useState({ title: "", description: "" });
   const [newQA, setNewQA] = useState({
     question: "",
     questionType: "multiple_choice" as const,
@@ -161,6 +164,30 @@ function LectureDetailContent() {
     }
   };
 
+  const handleEditLecture = () => {
+    setEditingLecture({
+      title: lecture.title,
+      description: lecture.description,
+    });
+    setIsLectureEditDialogOpen(true);
+  };
+
+  const handleUpdateLecture = async () => {
+    try {
+      await updateLecture({
+        lectureId,
+        updates: {
+          title: editingLecture.title,
+          description: editingLecture.description,
+        },
+      });
+      toast.success("講義情報を更新しました");
+      setIsLectureEditDialogOpen(false);
+    } catch (error) {
+      toast.error("更新に失敗しました");
+    }
+  };
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
@@ -180,7 +207,7 @@ function LectureDetailContent() {
               <CardTitle className="text-2xl">{lecture.title}</CardTitle>
               <CardDescription className="mt-2">{lecture.description}</CardDescription>
             </div>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleEditLecture}>
               <Edit className="mr-2 h-4 w-4" />
               編集
             </Button>
@@ -621,6 +648,48 @@ function LectureDetailContent() {
         cancelText="キャンセル"
         onConfirm={handleDeleteQA}
       />
+
+      {/* 講義編集ダイアログ */}
+      <Dialog open={isLectureEditDialogOpen} onOpenChange={setIsLectureEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>講義情報を編集</DialogTitle>
+            <DialogDescription>
+              講義のタイトルと説明を編集できます
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-title">講義タイトル</Label>
+              <Input
+                id="edit-title"
+                value={editingLecture.title}
+                onChange={(e) => setEditingLecture({ ...editingLecture, title: e.target.value })}
+                placeholder="講義タイトルを入力してください"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="edit-description">講義の説明</Label>
+              <Textarea
+                id="edit-description"
+                value={editingLecture.description}
+                onChange={(e) => setEditingLecture({ ...editingLecture, description: e.target.value })}
+                rows={4}
+                placeholder="講義の説明を入力してください"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLectureEditDialogOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleUpdateLecture}>
+              更新
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

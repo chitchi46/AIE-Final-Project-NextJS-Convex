@@ -23,6 +23,8 @@ import {
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Id } from "@/convex/_generated/dataModel";
+import { chartColors } from "@/lib/constants/colors";
 
 export default function LiveHostPage() {
   const params = useParams();
@@ -201,7 +203,7 @@ export default function LiveHostPage() {
                                         {session.currentQuestion.options.map((option, index) => (
                                           <Cell 
                                             key={`cell-${index}`} 
-                                            fill={session.currentQuestion && option === session.currentQuestion.answer ? "#10b981" : "#6366f1"} 
+                                            fill={session.currentQuestion && option === session.currentQuestion.answer ? chartColors.answer.correct : chartColors.answer.neutral} 
                                           />
                                         ))}
                                       </Bar>

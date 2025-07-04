@@ -29,6 +29,9 @@ import { motion } from "framer-motion";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { chartColors, difficultyLabels, accessibleColors } from "@/lib/constants/colors";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function StudentDashboardPage() {
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
@@ -72,7 +75,7 @@ export default function StudentDashboardPage() {
   // 認証中または未認証の場合はローディング画面を表示
   if (authLoading || !isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <LoadingSpinner size="lg" text="認証情報を確認中..." />
       </div>
     );
@@ -81,7 +84,7 @@ export default function StudentDashboardPage() {
   // データローディング中
   if (!studentId || !stats || !lectures) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
         <LoadingSpinner size="lg" text="データを読み込み中..." />
       </div>
     );
@@ -152,7 +155,7 @@ function DashboardContent({ user, studentId, logout }: {
   const progressData = generateProgressData();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       <div className="container mx-auto p-6 max-w-7xl">
         {/* ヘッダー */}
         <motion.div 
@@ -162,8 +165,8 @@ function DashboardContent({ user, studentId, logout }: {
         >
           <div className="flex justify-between items-center mb-2">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800">学習ダッシュボード</h1>
-              <p className="text-gray-600 mt-2">あなたの学習進捗を確認しましょう</p>
+              <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">学習ダッシュボード</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">あなたの学習進捗を確認しましょう</p>
             </div>
             <div className="flex gap-3">
               <Button 
@@ -175,6 +178,7 @@ function DashboardContent({ user, studentId, logout }: {
                   パーソナライズ学習
                 </Link>
               </Button>
+              <ThemeToggle />
               <Button 
                 variant="outline" 
                 onClick={logout}
@@ -221,8 +225,8 @@ function DashboardContent({ user, studentId, logout }: {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{stats.overallStats.totalResponses}</p>
-                <p className="text-sm text-gray-600 mt-1">問題に挑戦</p>
+                <p className="text-3xl font-bold dark:text-gray-100">{stats.overallStats.totalResponses}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">問題に挑戦</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -240,8 +244,8 @@ function DashboardContent({ user, studentId, logout }: {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-emerald-600">{stats.overallStats.correctResponses}</p>
-                <p className="text-sm text-gray-600 mt-1">正しく回答</p>
+                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{stats.overallStats.correctResponses}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">正しく回答</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -259,8 +263,8 @@ function DashboardContent({ user, studentId, logout }: {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{lectures.length}</p>
-                <p className="text-sm text-gray-600 mt-1">講義に参加</p>
+                <p className="text-3xl font-bold dark:text-gray-100">{lectures.length}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">講義に参加</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -293,9 +297,9 @@ function DashboardContent({ user, studentId, logout }: {
                     <Line 
                       type="monotone" 
                       dataKey="score" 
-                      stroke="#6366f1" 
+                      stroke={chartColors.single}
                       strokeWidth={3}
-                      dot={{ fill: '#6366f1', r: 6 }}
+                      dot={{ fill: chartColors.single, r: 6 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -412,21 +416,24 @@ function DashboardContent({ user, studentId, logout }: {
                     <CardContent>
                       <div className="space-y-3">
                         {Object.entries(learningHistory.statistics.difficultyStats).map(([difficulty, stats]) => {
-                          const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
-                          const difficultyLabels = { easy: "易", medium: "中", hard: "難" };
-                          const difficultyColors = { easy: "bg-green-100 text-green-800", medium: "bg-yellow-100 text-yellow-800", hard: "bg-red-100 text-red-800" };
+                          const difficultyColors = { 
+                            easy: `bg-cyan-100 text-cyan-800`, 
+                            medium: `bg-orange-100 text-orange-800`, 
+                            hard: `bg-purple-100 text-purple-800` 
+                          };
+                          const difficultyLabel = difficultyLabels[difficulty as keyof typeof difficultyLabels];
                           
                           return (
                             <div key={difficulty} className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <Badge className={difficultyColors[difficulty as keyof typeof difficultyColors]}>
-                                  {difficultyLabels[difficulty as keyof typeof difficultyLabels]}
+                                  {difficultyLabel}
                                 </Badge>
                                 <span className="text-sm">{stats.correct}/{stats.total} 正解</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{accuracy}%</span>
-                                <Progress value={accuracy} className="w-16" />
+                                <span className="text-sm font-medium">{stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0}%</span>
+                                <Progress value={stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0} className="w-16" />
                               </div>
                             </div>
                           );

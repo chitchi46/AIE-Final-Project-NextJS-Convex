@@ -29,6 +29,7 @@ import { useAction } from "convex/react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { AuthGuard } from "@/components/auth-guard";
+import { chartColors, difficultyLabels } from "@/lib/constants/colors";
 
 export default function TeacherAnalyticsPage() {
   const lectures = useQuery(api.lectures.listLectures, {});
@@ -62,15 +63,15 @@ export default function TeacherAnalyticsPage() {
     (totalStats.totalQuestions > 0 ? 
       Math.round((totalStats.totalResponses / totalStats.totalQuestions) * 75) : 0);
 
-  // 難易度別データ（実データから計算、フォールバックは均等分布）
-  const difficultyData = allLecturesStats?.difficultyDistribution ? [
-    { name: "易", value: allLecturesStats.difficultyDistribution.easy, color: "#10b981" },
-    { name: "中", value: allLecturesStats.difficultyDistribution.medium, color: "#f59e0b" },
-    { name: "難", value: allLecturesStats.difficultyDistribution.hard, color: "#ef4444" },
+  // 難易度分布データ（色覚多様性対応）
+  const difficultyData = allLecturesStats ? [
+    { name: difficultyLabels.easy, value: allLecturesStats.difficultyDistribution.easy, color: chartColors.difficulty.easy },
+    { name: difficultyLabels.medium, value: allLecturesStats.difficultyDistribution.medium, color: chartColors.difficulty.medium },
+    { name: difficultyLabels.hard, value: allLecturesStats.difficultyDistribution.hard, color: chartColors.difficulty.hard },
   ] : [
-    { name: "易", value: 40, color: "#10b981" },
-    { name: "中", value: 40, color: "#f59e0b" },
-    { name: "難", value: 20, color: "#ef4444" },
+    { name: difficultyLabels.easy, value: 40, color: chartColors.difficulty.easy },
+    { name: difficultyLabels.medium, value: 40, color: chartColors.difficulty.medium },
+    { name: difficultyLabels.hard, value: 20, color: chartColors.difficulty.hard },
   ];
 
   // 講義別パフォーマンスデータ
@@ -197,8 +198,8 @@ export default function TeacherAnalyticsPage() {
                         <YAxis yAxisId="right" orientation="right" />
                         <Tooltip />
                         <Legend />
-                        <Bar yAxisId="left" dataKey="問題数" fill="#6366f1" />
-                        <Bar yAxisId="right" dataKey="回答数" fill="#10b981" />
+                        <Bar yAxisId="left" dataKey="問題数" fill={chartColors.palette[0]} />
+                        <Bar yAxisId="right" dataKey="回答数" fill={chartColors.palette[1]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>

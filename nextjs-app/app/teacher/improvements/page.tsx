@@ -26,10 +26,14 @@ import {
   BarChart,
   Target,
   BookOpen,
-  ArrowLeft
+  ArrowLeft,
+  Filter,
+  Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { chartColors, accessibleColors } from "@/lib/constants/colors";
 
 export default function ImprovementsPage() {
   const router = useRouter();
@@ -38,6 +42,7 @@ export default function ImprovementsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [suggestionToDelete, setSuggestionToDelete] = useState<{ id: Id<"improvement_suggestions">; content: string } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | "generating" | "completed" | "failed" | "applied">("all");
 
   // 講義一覧を取得
   const lectures = useQuery(api.lectures.listLectures, {});
@@ -45,7 +50,10 @@ export default function ImprovementsPage() {
   // 選択された講義の改善提案を取得
   const suggestions = useQuery(
     api.improvements.getSuggestionsByLecture,
-    selectedLecture ? { lectureId: selectedLecture } : "skip"
+    selectedLecture ? { 
+      lectureId: selectedLecture,
+      status: statusFilter === "all" ? undefined : statusFilter
+    } : "skip"
   );
 
   // 講義の統計情報を取得
@@ -56,6 +64,7 @@ export default function ImprovementsPage() {
 
   // Mutations and Actions
   const deleteSuggestion = useMutation(api.improvements.deleteSuggestion);
+  const updateStatus = useMutation(api.improvements.updateStatus);
   const generateSuggestions = useAction(api.actions.generateImprovements.generateImprovementSuggestions);
 
   const handleGenerateSuggestions = async () => {
@@ -125,16 +134,52 @@ export default function ImprovementsPage() {
     setDeleteConfirmOpen(true);
   };
 
+  const handleApplySuggestion = async (suggestionId: Id<"improvement_suggestions">) => {
+    try {
+      await updateStatus({
+        suggestionId,
+        status: "applied",
+        appliedAt: Date.now(),
+      });
+      
+      toast({
+        title: "適用済みにしました",
+        description: "この改善提案を適用済みとしてマークしました。",
+      });
+    } catch (error) {
+      toast({
+        title: "エラー",
+        description: "ステータスの更新に失敗しました。",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getAccuracyColor = (accuracy: number) => {
-    if (accuracy >= 80) return "text-green-600";
-    if (accuracy >= 60) return "text-yellow-600";
-    return "text-red-600";
+    if (accuracy >= 80) return "text-cyan-600";
+    if (accuracy >= 60) return "text-orange-600";
+    return "text-purple-600";
   };
 
   const getAccuracyBadge = (accuracy: number) => {
-    if (accuracy >= 80) return { color: "bg-green-100 text-green-800", label: "良好" };
-    if (accuracy >= 60) return { color: "bg-yellow-100 text-yellow-800", label: "要改善" };
-    return { color: "bg-red-100 text-red-800", label: "要対策" };
+    if (accuracy >= 80) return { color: "bg-cyan-100 text-cyan-800", label: "良好" };
+    if (accuracy >= 60) return { color: "bg-orange-100 text-orange-800", label: "要改善" };
+    return { color: "bg-purple-100 text-purple-800", label: "要対策" };
+  };
+
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case "generating":
+        return { color: "bg-blue-100 text-blue-800", label: "生成中", icon: RefreshCw };
+      case "completed":
+        return { color: "bg-cyan-100 text-cyan-800", label: "完了", icon: CheckCircle };
+      case "failed":
+        return { color: "bg-purple-100 text-purple-800", label: "失敗", icon: AlertCircle };
+      case "applied":
+        return { color: "bg-indigo-100 text-indigo-800", label: "適用済み", icon: CheckCircle };
+      default:
+        return { color: "bg-gray-100 text-gray-800", label: "不明", icon: AlertCircle };
+    }
   };
 
   return (
@@ -222,6 +267,28 @@ export default function ImprovementsPage() {
 
             {/* 改善提案タブ */}
             <TabsContent value="suggestions" className="space-y-4">
+              {/* ステータスフィルター */}
+              <div className="flex items-center gap-4">
+                <Label className="flex items-center gap-2">
+                  <Filter className="h-4 w-4" />
+                  ステータスでフィルター:
+                </Label>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => setStatusFilter(value as any)}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    <SelectItem value="generating">生成中</SelectItem>
+                    <SelectItem value="completed">完了</SelectItem>
+                    <SelectItem value="failed">失敗</SelectItem>
+                    <SelectItem value="applied">適用済み</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {suggestions && suggestions.length === 0 && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
@@ -249,23 +316,49 @@ export default function ImprovementsPage() {
                               <Target className="h-5 w-5 text-orange-500" />
                               改善提案 #{index + 1}
                             </CardTitle>
-                            <CardDescription>
-                              平均正答率: {Math.round(suggestion.averageScore)}%
+                            <CardDescription className="flex items-center gap-4">
+                              <span>平均正答率: {Math.round(suggestion.averageScore)}%</span>
+                              {suggestion.status && (
+                                <Badge className={`${getStatusBadge(suggestion.status).color} flex items-center gap-1`}>
+                                  {suggestion.status === "generating" && (
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                  )}
+                                  {getStatusBadge(suggestion.status).label}
+                                </Badge>
+                              )}
+                              {suggestion.createdAt && (
+                                <span className="text-xs text-gray-500 flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {new Date(suggestion.createdAt).toLocaleDateString('ja-JP')}
+                                </span>
+                              )}
                             </CardDescription>
                           </div>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteClick(suggestion)}
+                            disabled={suggestion.status === "generating"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="p-4 bg-blue-50 rounded-lg">
-                          <p className="text-gray-800">{suggestion.content}</p>
-                        </div>
+                        {suggestion.status === "generating" ? (
+                          <div className="p-4 bg-gray-50 rounded-lg flex items-center justify-center">
+                            <LoadingSpinner size="sm" />
+                            <span className="ml-2 text-gray-600">生成中...</span>
+                          </div>
+                        ) : suggestion.status === "failed" ? (
+                          <div className="p-4 bg-red-50 rounded-lg">
+                            <p className="text-red-800">エラー: {suggestion.errorMessage || "生成に失敗しました"}</p>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-blue-50 rounded-lg">
+                            <p className="text-gray-800">{suggestion.content}</p>
+                          </div>
+                        )}
 
                         {suggestion.targetQAs && suggestion.targetQAs.length > 0 && (
                           <div>
@@ -285,6 +378,26 @@ export default function ImprovementsPage() {
                                 </div>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {/* アクションボタン */}
+                        {suggestion.status === "completed" && (
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleApplySuggestion(suggestion._id)}
+                            >
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              適用済みにする
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {suggestion.status === "applied" && suggestion.appliedAt && (
+                          <div className="text-right text-sm text-gray-500">
+                            適用日: {new Date(suggestion.appliedAt).toLocaleDateString('ja-JP')}
                           </div>
                         )}
                       </CardContent>

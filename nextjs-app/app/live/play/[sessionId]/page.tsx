@@ -69,7 +69,7 @@ export default function LivePlayPage() {
     try {
       await submitAnswer({
         sessionId: sessionId as any,
-        questionIndex: session.currentQuestionIndex,
+        questionIndex: session?.currentQuestionIndex ?? 0,
         answer: selectedAnswer,
         participantId: currentParticipant.id,
         timeSpent: timer
@@ -205,7 +205,7 @@ export default function LivePlayPage() {
                   )}
 
                   {/* 記述式問題の場合または質問タイプが不明な場合 */}
-                  {(session.currentQuestion.questionType === "text" || 
+                  {(((session.currentQuestion.questionType as any) === "text") || 
                     session.currentQuestion.questionType === "descriptive" ||
                     session.currentQuestion.questionType === "short_answer" ||
                     !session.currentQuestion.questionType) && (

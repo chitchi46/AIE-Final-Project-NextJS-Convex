@@ -39,11 +39,11 @@ export const generateQAWithAI = action({
 
       const openai = new OpenAI({ apiKey });
 
-      // 各難易度の問題数を計算
+      // 各難易度の問題数を計算（確実に合計数を維持）
       const totalCount = args.questionCount;
-      const easyCount = Math.round(totalCount * args.difficulty.easy);
-      const mediumCount = Math.round(totalCount * args.difficulty.medium);
-      const hardCount = totalCount - easyCount - mediumCount;
+      const easyCount = Math.floor(totalCount * args.difficulty.easy);
+      const mediumCount = Math.floor(totalCount * args.difficulty.medium);
+      const hardCount = totalCount - easyCount - mediumCount; // 残りを難問に割り当て
 
       console.log(`Q&A生成開始: 合計${totalCount}問 (易${easyCount}問, 中${mediumCount}問, 難${hardCount}問)`);
       console.log(`講義内容プレビュー: ${args.content.substring(0, 200)}...`);
@@ -76,15 +76,15 @@ export const generateQAWithAI = action({
 - difficulty: "easy"、"medium"、"hard"
 - explanation: 資料のどの部分から答えが導かれるかの説明
 
-【質問作成のガイドライン】
-- 易問: 選択式問題で「〜とは何ですか？」「〜の単位は？」など基本定義（記述問題は易問にしない）
-- 中問: 「〜の主要な要素は？」「〜の特徴として正しいのは？」など理解度確認、記述問題の基本レベル
-- 難問: 「〜について説明し、その重要性を述べよ」「〜について考察せよ」など総合的理解
+【質問作成のガイドライン（問題タイプを難易度に応じて固定）】
+- 易問: **必ず選択式問題（multiple_choice）**で「〜とは何ですか？」「〜の単位は？」など基本定義
+- 中問: **必ず短答式問題（short_answer）**で「〜の主要な要素は？」「〜の特徴は？」など理解度確認
+- 難問: **必ず記述式問題（descriptive）**で「〜について説明し、その重要性を述べよ」「〜について考察せよ」など総合的理解
 
-【重要: 問題タイプ別の難易度設定】
-- 記述問題（descriptive）: 最低でも medium 以上の難易度に設定すること
-- 短答問題（short_answer）: easy〜hard まで可能
-- 選択問題（multiple_choice）: easy〜hard まで可能
+【必須: 問題タイプ別の難易度設定】
+- 易しい問題（easy）: 必ずquestionType="multiple_choice"を使用
+- 中程度の問題（medium）: 必ずquestionType="short_answer"を使用  
+- 難しい問題（hard）: 必ずquestionType="descriptive"を使用
 
 【選択肢作成のガイドライン】
 - 正解: 資料に明記されている正確な情報

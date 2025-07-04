@@ -46,6 +46,7 @@ import {
   Legend 
 } from "recharts";
 import { Id } from "@/convex/_generated/dataModel";
+import { chartColors } from "@/lib/constants/colors";
 
 export default function AdvancedAnalyticsPage() {
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
@@ -213,8 +214,8 @@ export default function AdvancedAnalyticsPage() {
                             <Area 
                               type="monotone" 
                               dataKey="accuracy" 
-                              stroke="#6366f1" 
-                              fill="#6366f1" 
+                              stroke={chartColors.palette[0]}
+                              fill={chartColors.palette[0]}
                               fillOpacity={0.6}
                             />
                           </AreaChart>
@@ -239,7 +240,7 @@ export default function AdvancedAnalyticsPage() {
                                                           <XAxis dataKey="day" />
                             <YAxis />
                             <Tooltip />
-                            <Bar dataKey="accuracy" fill="#10b981" />
+                            <Bar dataKey="accuracy" fill={chartColors.palette[1]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -349,9 +350,9 @@ export default function AdvancedAnalyticsPage() {
                           <Line 
                             type="monotone" 
                             dataKey="accuracy" 
-                            stroke="#6366f1" 
+                            stroke={chartColors.palette[0]}
                             strokeWidth={2}
-                            dot={{ fill: "#6366f1" }}
+                            dot={{ fill: chartColors.palette[0] }}
                           />
                         </RechartsLineChart>
                       </ResponsiveContainer>

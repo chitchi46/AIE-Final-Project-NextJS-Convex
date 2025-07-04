@@ -129,4 +129,31 @@
     --amber-500: #f59e0b;
     --amber-600: #d97706;
   }
+  
+  :root {
+    /* Primary (Blue) */
+    --color-primary-500: #2563eb;
+    --color-primary-600: #1e40af;
+    --color-primary-100: #dbeafe;
+    
+    /* Success (Cyan) */
+    --color-success-500: #0891b2;
+    --color-success-600: #0e7490;
+    --color-success-100: #cffafe;
+    
+    /* Warning (Orange) */
+    --color-warning-500: #ea580c;
+    --color-warning-600: #c2410c;
+    --color-warning-100: #fed7aa;
+    
+    /* Error (Purple) */
+    --color-error-500: #9333ea;
+    --color-error-600: #7c3aed;
+    --color-error-100: #f3e8ff;
+    
+    /* Neutral (Gray) */
+    --color-neutral-500: #6b7280;
+    --color-neutral-600: #4b5563;
+    --color-neutral-100: #f3f4f6;
+  }
 }

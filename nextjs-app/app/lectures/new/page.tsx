@@ -95,7 +95,8 @@ function NewLectureContent() {
         description: lectureContent.trim() ? "Q&Aも自動生成されました。" : "講義を作成しました。",
       });
 
-      router.push("/dashboard");
+      // 生成結果確認のため講義詳細ページに遷移
+      router.push(`/lecture/${lectureId}`);
     } catch (err) {
       setError("講義の作成中にエラーが発生しました。");
       toast.error("エラーが発生しました", {

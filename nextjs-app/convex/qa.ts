@@ -847,4 +847,293 @@ export const fixQuestionTypesInternal = mutation({
       message: `${fixedCount}件の問題の整合性を修正しました`,
     };
   },
-}); 
+});
+
+// AI生成によるQA作成
+export const generateQAWithAI = mutation({
+  args: {
+    lectureId: v.id("lectures"),
+    prompt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || user.role !== "teacher") {
+      throw new ConvexError("Unauthorized: Only teachers can generate QA");
+    }
+
+    // 講義内容を取得
+    const lecture = await ctx.db.get(args.lectureId);
+    if (!lecture) {
+      throw new ConvexError("Lecture not found");
+    }
+
+    try {
+      // プロンプトから難易度別の問題数を解析
+      const prompt = args.prompt.toLowerCase();
+      const difficultyCounts: Record<"easy" | "medium" | "hard", number> = {
+        easy: 0,
+        medium: 0,
+        hard: 0,
+      };
+
+      // 難易度毎の正規表現マッチ
+      const patterns: { key: "easy" | "medium" | "hard"; regex: RegExp }[] = [
+        // 「易を2問」「中を1問」「難を3問」など助詞や空白を含む形式にもマッチするように
+        { key: "easy", regex: /(易|簡単|easy)(?:しい|い)?[^0-9]*(\d+)\s*問?/ },
+        { key: "medium", regex: /(中|普通|medium)[^0-9]*(\d+)\s*問?/ },
+        { key: "hard", regex: /(難|高度|hard)[^0-9]*(\d+)\s*問?/ },
+      ];
+
+      for (const { key, regex } of patterns) {
+        const m = prompt.match(regex);
+        if (m && m[2]) {
+          difficultyCounts[key] = parseInt(m[2]);
+        }
+      }
+
+      // もし個別指定がなければ全体数を取得
+      let totalRequested = Object.values(difficultyCounts).reduce((a, b) => a + b, 0);
+      if (totalRequested === 0) {
+        const countMatch = prompt.match(/(\d+)\s*問/);
+        totalRequested = countMatch ? parseInt(countMatch[1]) : 3;
+        // 単一難易度を推定
+        const guessDifficulty = prompt.includes("易") ? "easy" : prompt.includes("難") ? "hard" : "medium";
+        difficultyCounts[guessDifficulty] = totalRequested;
+      }
+
+      const questionTypeMap = {
+        easy: "multiple_choice" as const,
+        medium: "short_answer" as const,
+        hard: "descriptive" as const,
+      };
+
+      const generatedQAs = [];
+      const timestamp = Date.now();
+      let globalIndex = 1;
+
+      for (const diff of ["easy", "medium", "hard"] as const) {
+        const count = difficultyCounts[diff];
+        const questionType = questionTypeMap[diff];
+        for (let i = 0; i < count; i++) {
+          let qaData: any;
+
+          // 講義説明の先頭文を抽出（なければタイトル）
+          const firstSentence = (lecture.description ?? lecture.title).split(/[。\.]/)[0];
+
+          if (questionType === "multiple_choice") {
+            // 正解は説明の要約（先頭文）とし、誤答はタイトルを改変
+            const correct = firstSentence.trim();
+            const distractors = [
+              `${lecture.title}とは無関係な内容`,
+              `${lecture.title}の対義語的概念`,
+              `${lecture.title}の別分野のトピック`,
+            ];
+            // シャッフルして A〜D に割当
+            const opts = [correct, ...distractors].sort(() => Math.random() - 0.5);
+            qaData = {
+              lectureId: args.lectureId,
+              question: `以下のうち、${lecture.title} で扱うテーマとして最も適切なのはどれですか？ (問題${globalIndex})`,
+              questionType,
+              options: opts.map((o, idx) => `${String.fromCharCode(65 + idx)}. ${o}`),
+              answer: opts.find((o) => o === correct) ? `${String.fromCharCode(65 + opts.indexOf(correct))}. ${correct}` : `A. ${correct}`,
+              difficulty: diff,
+              explanation: `${lecture.title} の概要より抜粋。`,
+              isPublished: true,
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            };
+          } else if (questionType === "short_answer") {
+            qaData = {
+              lectureId: args.lectureId,
+              question: `${lecture.title} の重要なポイントを簡潔に説明してください。(問題${globalIndex})`,
+              questionType,
+              answer: firstSentence.trim(),
+              difficulty: diff,
+              explanation: "講義説明の主要文を答える問題です。",
+              isPublished: true,
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            };
+          } else {
+            qaData = {
+              lectureId: args.lectureId,
+              question: `${lecture.title} について、講義で説明された内容を踏まえて詳しく述べ、具体例を挙げてください。(問題${globalIndex})`,
+              questionType,
+              answer: `${firstSentence.trim()} などを含めた詳細な説明を想定。`,
+              difficulty: diff,
+              explanation: "記述式で深い理解を問う問題です。",
+              isPublished: true,
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            };
+          }
+          const qaId = await ctx.db.insert("qa_templates", qaData);
+          generatedQAs.push({ ...qaData, _id: qaId });
+          globalIndex++;
+        }
+      }
+
+      return {
+        success: true,
+        qaList: generatedQAs,
+        message: `${generatedQAs.length}件のQAを生成しました`,
+      };
+      
+    } catch (error) {
+      console.error("AI生成エラー:", error);
+      return {
+        success: false,
+        error: "QAの生成中にエラーが発生しました",
+        qaList: [],
+      };
+    }
+  },
+});
+
+// 一括公開/非公開切り替え
+export const bulkTogglePublish = mutation({
+  args: {
+    qaIds: v.array(v.id("qa_templates")),
+    isPublished: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || (user.role !== "teacher" && user.role !== "admin")) {
+      throw new ConvexError("Unauthorized: Only teachers and admins can bulk toggle publish");
+    }
+
+    const results = [];
+    const timestamp = Date.now();
+
+    for (const qaId of args.qaIds) {
+      const qa = await ctx.db.get(qaId);
+      if (!qa) {
+        results.push({ qaId, success: false, error: "QA not found" });
+        continue;
+      }
+
+      // 現在の状態と変更後の状態が同じ場合はスキップ
+      const currentStatus = qa.isPublished !== false;
+      if (currentStatus === args.isPublished) {
+        results.push({ qaId, success: true, skipped: true });
+        continue;
+      }
+
+      await ctx.db.patch(qaId, {
+        isPublished: args.isPublished,
+        updatedAt: timestamp,
+      });
+
+      // 監査ログを記録
+      await ctx.runMutation(api.auditLogs.logAction, {
+        action: args.isPublished ? "publish" : "unpublish",
+        resourceType: "qa_template",
+        resourceId: qaId,
+        details: {
+          previousValue: { isPublished: currentStatus },
+          newValue: { isPublished: args.isPublished },
+          description: `QA「${qa.question.substring(0, 30)}...」を${args.isPublished ? '公開' : '非公開に'}しました（一括操作）`,
+        },
+      });
+
+      results.push({ qaId, success: true });
+    }
+
+    const successCount = results.filter(r => r.success && !r.skipped).length;
+    const skippedCount = results.filter(r => r.skipped).length;
+    const failureCount = results.filter(r => !r.success).length;
+
+    return {
+      success: true,
+      results,
+      summary: {
+        total: args.qaIds.length,
+        succeeded: successCount,
+        skipped: skippedCount,
+        failed: failureCount,
+      },
+      message: `${successCount}件のQAを${args.isPublished ? '公開' : '非公開に'}しました`,
+    };
+  },
+});
+
+// 一括削除
+export const bulkDeleteQA = mutation({
+  args: {
+    qaIds: v.array(v.id("qa_templates")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || (user.role !== "teacher" && user.role !== "admin")) {
+      throw new ConvexError("Unauthorized: Only teachers and admins can bulk delete QA");
+    }
+
+    const results = [];
+    const deletedQAs = [];
+
+    for (const qaId of args.qaIds) {
+      const qa = await ctx.db.get(qaId);
+      if (!qa) {
+        results.push({ qaId, success: false, error: "QA not found" });
+        continue;
+      }
+
+      // 削除前にQA情報を保存（復元用）
+      deletedQAs.push({
+        _id: qa._id,
+        question: qa.question,
+        questionType: qa.questionType,
+        options: qa.options,
+        answer: qa.answer,
+        difficulty: qa.difficulty,
+        explanation: qa.explanation,
+        lectureId: qa.lectureId,
+      });
+
+      await ctx.db.delete(qaId);
+
+      // 監査ログを記録
+      await ctx.runMutation(api.auditLogs.logAction, {
+        action: "delete",
+        resourceType: "qa_template",
+        resourceId: qaId,
+        details: {
+          previousValue: qa,
+          description: `QA「${qa.question.substring(0, 30)}...」を削除しました（一括操作）`,
+        },
+      });
+
+      results.push({ qaId, success: true });
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+
+    return {
+      success: true,
+      results,
+      deletedQAs, // 削除されたQAのデータ（将来の復元機能用）
+      summary: {
+        total: args.qaIds.length,
+        succeeded: successCount,
+        failed: failureCount,
+      },
+      message: `${successCount}件のQAを削除しました`,
+    };
+  },
+});

@@ -18,6 +18,7 @@ import { LoadingSpinner } from "@/components/loading-spinner";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { chartColors, difficultyLabels } from "@/lib/constants/colors";
 
 export default function PersonalizedQuizPage() {
   const params = useParams();
@@ -156,9 +157,9 @@ export default function PersonalizedQuizPage() {
   };
 
   const difficultyColor = {
-    easy: "bg-green-100 text-green-800",
-    medium: "bg-yellow-100 text-yellow-800",
-    hard: "bg-red-100 text-red-800",
+    easy: "bg-cyan-100 text-cyan-800",
+    medium: "bg-orange-100 text-orange-800",
+    hard: "bg-purple-100 text-purple-800",
   };
 
   const learningLevelInfo = {
@@ -262,9 +263,7 @@ export default function PersonalizedQuizPage() {
               <div className="flex justify-between items-center mb-2">
                 <CardTitle>{lecture.title}</CardTitle>
                 <Badge className={difficultyColor[currentQA.difficulty as keyof typeof difficultyColor]}>
-                  {currentQA.difficulty === "easy" && "易"}
-                  {currentQA.difficulty === "medium" && "中"}
-                  {currentQA.difficulty === "hard" && "難"}
+                  {difficultyLabels[currentQA.difficulty as keyof typeof difficultyLabels]}
                 </Badge>
               </div>
               <CardDescription>

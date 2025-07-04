@@ -64,8 +64,20 @@ export default defineSchema({
     content: v.string(),
     targetQaIds: v.array(v.id("qa_templates")), // 関連するQAのID
     averageScore: v.number(), // 対象QAの平均正答率
+    status: v.optional(v.union(
+      v.literal("generating"), // 生成中
+      v.literal("completed"),  // 完了
+      v.literal("failed"),     // 失敗
+      v.literal("applied")     // 適用済み
+    )),
+    generationHash: v.optional(v.string()), // 重複防止用のハッシュ
+    generatedBy: v.optional(v.string()),    // 生成したユーザーID
+    appliedAt: v.optional(v.number()),      // 適用された日時
+    errorMessage: v.optional(v.string()),   // エラーメッセージ
     createdAt: v.number(),
-  }).index("by_lecture", ["lectureId"]),
+  }).index("by_lecture", ["lectureId"])
+    .index("by_status", ["status"])
+    .index("by_hash", ["generationHash"]),
 
   // ユーザー認証情報（Convex Authで管理）
   users: defineTable({

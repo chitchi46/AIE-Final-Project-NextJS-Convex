@@ -9,6 +9,8 @@ export const createSuggestion = mutation({
     content: v.string(),
     targetQaIds: v.array(v.id("qa_templates")),
     averageScore: v.number(),
+    generationHash: v.optional(v.string()),
+    generatedBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const suggestionId = await ctx.db.insert("improvement_suggestions", {
@@ -16,6 +18,9 @@ export const createSuggestion = mutation({
       content: args.content,
       targetQaIds: args.targetQaIds,
       averageScore: args.averageScore,
+      status: "completed",
+      generationHash: args.generationHash,
+      generatedBy: args.generatedBy,
       createdAt: Date.now(),
     });
 
@@ -23,15 +28,81 @@ export const createSuggestion = mutation({
   },
 });
 
-// 講義の改善提案を取得
-export const getSuggestionsByLecture = query({
+// ハッシュによる重複チェック
+export const checkDuplicateByHash = query({
+  args: { 
+    lectureId: v.id("lectures"),
+    hash: v.string() 
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("improvement_suggestions")
+      .withIndex("by_hash", (q) => q.eq("generationHash", args.hash))
+      .filter((q) => q.eq(q.field("lectureId"), args.lectureId))
+      .first();
+    
+    return existing !== null;
+  },
+});
+
+// 進行中の生成があるかチェック
+export const hasGeneratingStatus = query({
   args: { lectureId: v.id("lectures") },
   handler: async (ctx, args) => {
-    const suggestions = await ctx.db
+    const generating = await ctx.db
       .query("improvement_suggestions")
       .withIndex("by_lecture", (q) => q.eq("lectureId", args.lectureId))
-      .order("desc")
-      .collect();
+      .filter((q) => q.eq(q.field("status"), "generating"))
+      .first();
+    
+    return generating !== null;
+  },
+});
+
+// ステータスを更新
+export const updateStatus = mutation({
+  args: {
+    suggestionId: v.id("improvement_suggestions"),
+    status: v.union(
+      v.literal("generating"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("applied")
+    ),
+    errorMessage: v.optional(v.string()),
+    appliedAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.suggestionId, {
+      status: args.status,
+      ...(args.errorMessage && { errorMessage: args.errorMessage }),
+      ...(args.appliedAt && { appliedAt: args.appliedAt }),
+    });
+  },
+});
+
+// 講義の改善提案を取得（ステータスでフィルタリング可能）
+export const getSuggestionsByLecture = query({
+  args: { 
+    lectureId: v.id("lectures"),
+    status: v.optional(v.union(
+      v.literal("generating"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("applied")
+    ))
+  },
+  handler: async (ctx, args) => {
+    let query = ctx.db
+      .query("improvement_suggestions")
+      .withIndex("by_lecture", (q) => q.eq("lectureId", args.lectureId));
+    
+    // ステータスフィルター
+    if (args.status) {
+      query = query.filter((q) => q.eq(q.field("status"), args.status));
+    }
+    
+    const suggestions = await query.order("desc").collect();
 
     // 関連するQ&A情報も含めて返す
     const suggestionsWithQAs = await Promise.all(

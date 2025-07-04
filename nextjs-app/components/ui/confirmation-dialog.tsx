@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Info, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ConfirmationDialogVariant = "destructive" | "warning" | "info";
+export type ConfirmationDialogVariant = "destructive" | "warning" | "info" | "default";
 
 interface ConfirmationDialogProps {
   open: boolean;
@@ -45,6 +45,11 @@ const variantConfig = {
     iconColor: "text-blue-600",
     confirmButtonVariant: "default" as const,
   },
+  default: {
+    icon: Info,
+    iconColor: "text-gray-600",
+    confirmButtonVariant: "default" as const,
+  },
 };
 
 export function ConfirmationDialog({
@@ -59,7 +64,7 @@ export function ConfirmationDialog({
   isLoading = false,
   showIcon = true,
 }: ConfirmationDialogProps) {
-  const config = variantConfig[variant];
+  const config = variantConfig[variant] || variantConfig.default;
   const Icon = config.icon;
 
   const handleConfirm = async () => {

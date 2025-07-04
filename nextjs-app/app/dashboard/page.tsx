@@ -47,6 +47,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/auth-guard";
 import { Suspense } from "react";
+import { Id } from "@/convex/_generated/dataModel";
+import { chartColors, accessibleColors } from "@/lib/constants/colors";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 function DashboardContent() {
   const { user, logout, isLoading: authLoading } = useAuth();
@@ -235,8 +238,8 @@ function DashboardContent() {
 
   return (
     <AuthGuard requiredRole="teacher">
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <div className="container mx-auto p-6 max-w-7xl">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <main id="main-content" className="container mx-auto p-6 max-w-7xl">
           {/* ヘッダー */}
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
@@ -245,11 +248,11 @@ function DashboardContent() {
           >
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2 gap-4">
               <div>
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-                  <BookOpen className="h-8 w-8 lg:h-10 lg:w-10 text-indigo-600" />
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
+                  <BookOpen className="h-8 w-8 lg:h-10 lg:w-10 text-indigo-600 dark:text-indigo-400" />
                   講師ダッシュボード
                 </h1>
-                <p className="text-slate-600 mt-2 text-base lg:text-lg">
+                <p className="text-slate-600 dark:text-slate-400 mt-2 text-base lg:text-lg">
                   {user ? `${user.name}さん、こんにちは！` : "講義と学習状況を一元管理"}
                 </p>
               </div>
@@ -289,6 +292,7 @@ function DashboardContent() {
                     <span className="sm:hidden">ライブ</span>
                   </Link>
                 </Button>
+                <ThemeToggle />
                 <Button size="default" variant="outline" onClick={logout} className="flex-initial">
                   <LogOut className="h-4 w-4 lg:h-5 lg:w-5" />
                 </Button>
@@ -309,7 +313,7 @@ function DashboardContent() {
               icon={<FileText className="h-5 w-5" />}
               trend={lecturesTrend}
               chartData={generateRealChartData}
-              color="indigo"
+              color="primary"
             />
             <MetricCard
               title="総Q&A数"
@@ -317,7 +321,7 @@ function DashboardContent() {
               icon={<BarChart3 className="h-5 w-5" />}
               trend={qaTrend}
               chartData={generateQAChartData}
-              color="emerald"
+              color="success"
             />
             <MetricCard
               title="総回答数"
@@ -325,7 +329,7 @@ function DashboardContent() {
               icon={<Users className="h-5 w-5" />}
               trend={responsesTrend}
               chartData={generateResponseChartData}
-              color="amber"
+              color="warning"
             />
           </motion.div>
 
@@ -334,11 +338,11 @@ function DashboardContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="bg-white/50 backdrop-blur rounded-2xl p-8 shadow-sm"
+            className="bg-white/50 dark:bg-slate-800/50 backdrop-blur rounded-2xl p-8 shadow-sm"
           >
             <div className="flex items-center gap-3 mb-6">
-              <BookOpen className="h-6 w-6 text-indigo-600" />
-              <h2 className="text-2xl font-bold text-slate-900">講義一覧</h2>
+              <BookOpen className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">講義一覧</h2>
             </div>
 
             {currentStats.lectureCount === 0 ? (
@@ -351,7 +355,7 @@ function DashboardContent() {
               </div>
             )}
           </motion.section>
-        </div>
+        </main>
       </div>
     </AuthGuard>
   );
@@ -364,13 +368,25 @@ function MetricCard({ title, value, icon, trend, chartData, color }: {
   icon: React.ReactNode;
   trend: number;
   chartData: any[];
-  color: "indigo" | "emerald" | "amber";
+  color: "primary" | "success" | "warning";
 }) {
   const isPositive = trend >= 0;
   const colorClasses = {
-    indigo: "from-indigo-500 to-indigo-600",
-    emerald: "from-emerald-500 to-emerald-600",
-    amber: "from-amber-500 to-amber-600",
+    primary: "from-blue-500 to-blue-600",
+    success: "from-cyan-500 to-cyan-600",
+    warning: "from-orange-500 to-orange-600",
+  };
+  
+  const bgColorClasses = {
+    primary: "bg-blue-100 text-blue-600",
+    success: "bg-cyan-100 text-cyan-600",
+    warning: "bg-orange-100 text-orange-600",
+  };
+  
+  const strokeColors = {
+    primary: accessibleColors.primary.DEFAULT,
+    success: accessibleColors.success.DEFAULT,
+    warning: accessibleColors.warning.DEFAULT,
   };
 
   return (
@@ -378,7 +394,7 @@ function MetricCard({ title, value, icon, trend, chartData, color }: {
       <div className={`absolute inset-0 bg-gradient-to-br ${colorClasses[color]} opacity-5`} />
       <CardHeader className="relative">
         <div className="flex items-center justify-between">
-          <div className={`p-2 rounded-lg bg-${color}-100 text-${color}-600`}>
+          <div className={`p-2 rounded-lg ${bgColorClasses[color]}`}>
             {icon}
           </div>
           <div className="flex items-center gap-1 text-sm">
@@ -394,15 +410,15 @@ function MetricCard({ title, value, icon, trend, chartData, color }: {
         </div>
       </CardHeader>
       <CardContent className="relative">
-        <p className="text-sm text-slate-600 mb-1">{title}</p>
-        <p className="text-3xl font-extrabold tracking-tight">{value}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">{title}</p>
+        <p className="text-3xl font-extrabold tracking-tight dark:text-slate-100">{value}</p>
         <div className="absolute bottom-0 right-0 w-24 h-12 opacity-50">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
               <Line 
                 type="monotone" 
                 dataKey="value" 
-                stroke={`var(--${color}-500)`}
+                stroke={strokeColors[color]}
                 strokeWidth={2}
                 dot={false}
               />
@@ -450,14 +466,25 @@ function LectureCard({ lecture, index }: { lecture: any; index: number }) {
               </Badge>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0 hover:bg-gray-100"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent 
+                  align="end" 
+                  className="w-32 z-[9999] bg-white border border-gray-200 shadow-lg rounded-md min-w-[8rem]"
+                >
                   <DropdownMenuItem
-                    onClick={() => setIsDeleteDialogOpen(true)}
-                    className="text-red-600 focus:text-red-600"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsDeleteDialogOpen(true);
+                    }}
+                    className="text-red-600 focus:text-red-600 cursor-pointer hover:bg-red-50 focus:bg-red-50"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
                     削除
@@ -474,10 +501,10 @@ function LectureCard({ lecture, index }: { lecture: any; index: number }) {
         <CardContent>
           <div className="space-y-3 mb-4">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-slate-600">回答数</span>
-              <span className="font-semibold">{lecture.responseCount || 0}</span>
+              <span className="text-sm text-slate-600 dark:text-slate-400">回答数</span>
+              <span className="font-semibold dark:text-slate-100">{lecture.responseCount || 0}</span>
             </div>
-            <div className="w-full bg-slate-200 rounded-full h-2">
+            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
               <div 
                 className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-2 rounded-full"
                 style={{ width: `${Math.min((lecture.responseCount || 0) / 50 * 100, 100)}%` }}
@@ -544,10 +571,10 @@ function EmptyState({ onCreateSampleData }: { onCreateSampleData: () => void }) 
         <div className="absolute inset-0 bg-indigo-100 rounded-full blur-2xl opacity-50" />
         <Sparkles className="relative h-20 w-20 text-indigo-600 mx-auto mb-6" />
       </div>
-      <h3 className="text-2xl font-bold text-slate-900 mb-2">
+      <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
         最初の講義を作成しましょう
       </h3>
-      <p className="text-slate-600 mb-8 max-w-md mx-auto">
+      <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
         講義資料をアップロードして、AIが自動的にQ&Aを生成します。
         学生の理解度を即座に把握できます。
       </p>

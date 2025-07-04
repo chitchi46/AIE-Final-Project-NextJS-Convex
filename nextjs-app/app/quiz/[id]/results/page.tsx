@@ -11,6 +11,7 @@ import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { motion } from "framer-motion";
+import { chartColors, difficultyLabels, accessibleColors } from "@/lib/constants/colors";
 
 export default function QuizResultsPage() {
   const params = useParams();
@@ -29,7 +30,7 @@ export default function QuizResultsPage() {
   }
 
   const score = Math.round((stats.overallStats.totalCorrect / stats.overallStats.totalQuestions) * 100);
-  const scoreColor = score >= 80 ? "text-green-600" : score >= 60 ? "text-yellow-600" : "text-red-600";
+  const scoreColor = score >= 80 ? "text-cyan-600" : score >= 60 ? "text-orange-600" : "text-purple-600";
   const scoreMessage = score >= 80 ? "素晴らしい！" : score >= 60 ? "よくできました！" : "もう少し頑張りましょう";
 
   return (
@@ -151,9 +152,9 @@ export default function QuizResultsPage() {
               <div className="space-y-4">
                 {Object.entries(stats.difficultyStats).map(([difficulty, data], index) => {
                   const difficultyLabels = {
-                    easy: { label: "易", color: "bg-green-500" },
-                    medium: { label: "中", color: "bg-yellow-500" },
-                    hard: { label: "難", color: "bg-red-500" },
+                    easy: { label: "易", color: "bg-cyan-500" },
+                    medium: { label: "中", color: "bg-orange-500" },
+                    hard: { label: "難", color: "bg-purple-500" },
                   };
                   const { label, color } = difficultyLabels[difficulty as keyof typeof difficultyLabels];
                   const percentage = Math.round(data.averageAccuracy * 100);

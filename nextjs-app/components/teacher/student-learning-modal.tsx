@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { User, TrendingUp, Target, Clock, CheckCircle, XCircle } from "lucide-react";
+import { chartColors, difficultyLabels, accessibleColors } from "@/lib/constants/colors";
 
 interface StudentLearningModalProps {
   isOpen: boolean;
@@ -75,20 +76,20 @@ export function StudentLearningModal({
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case "easy":
-        return "bg-green-100 text-green-800";
+        return "bg-cyan-100 text-cyan-800";
       case "medium":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-orange-100 text-orange-800";
       case "hard":
-        return "bg-red-100 text-red-800";
+        return "bg-purple-100 text-purple-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
   const getAccuracyColor = (accuracy: number) => {
-    if (accuracy >= 80) return "text-green-600";
-    if (accuracy >= 60) return "text-yellow-600";
-    return "text-red-600";
+    if (accuracy >= 80) return "text-cyan-600";
+    if (accuracy >= 60) return "text-orange-600";
+    return "text-purple-600";
   };
 
   return (
@@ -147,18 +148,15 @@ export function StudentLearningModal({
                   <div key={difficulty} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Badge className={getDifficultyColor(difficulty)}>
-                        {difficulty === "easy" ? "易" : difficulty === "medium" ? "中" : "難"}
+                        {difficultyLabels[difficulty as keyof typeof difficultyLabels]}
                       </Badge>
                       <span className="text-sm text-gray-600">
-                        {stats.count}問回答
+                        {(stats as any).total ?? (stats as any).count}問中{(stats as any).correct ?? (stats as any).correctResponses}問正解
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Progress value={stats.accuracy} className="w-24" />
-                      <span className={`text-sm font-medium ${getAccuracyColor(stats.accuracy)}`}>
-                        {stats.accuracy.toFixed(1)}%
-                      </span>
-                    </div>
+                    <span className={`text-sm font-medium ${getAccuracyColor(stats.accuracy)}`}>
+                      {Math.round(stats.accuracy)}%
+                    </span>
                   </div>
                 ))}
               </CardContent>
@@ -204,7 +202,7 @@ export function StudentLearningModal({
                         <p className="text-sm font-medium">{item.question}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge className={getDifficultyColor(item.difficulty)} variant="outline">
-                            {item.difficulty === "easy" ? "易" : item.difficulty === "medium" ? "中" : "難"}
+                            {difficultyLabels[item.difficulty as keyof typeof difficultyLabels]}
                           </Badge>
                           <span className="text-xs text-gray-500">
                             {new Date(item.timestamp).toLocaleString()}
